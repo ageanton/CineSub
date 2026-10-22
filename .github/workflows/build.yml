@@ -516,4 +516,1900 @@ jobs:
                   <input type="range" id="stroke-slider" min="0" max="10" value="4" />
                 </div>
 
-                <div class=
+                <div class="control-group">
+                  <div class="control-row">
+                    <span>Dimmer Box Opacity</span>
+                    <span id="bg-opacity-val">45%</span>
+                  </div>
+                  <input type="range" id="bg-opacity-slider" min="0" max="95" value="45" />
+                </div>
+
+                <div class="control-group">
+                  <div class="control-row"><span>Cinema Tint Presets</span></div>
+                  <div class="swatch-row">
+                    <div class="swatch active" style="background:#FFFFFF;" data-color="#FFFFFF" title="Pure Cinema White"></div>
+                    <div class="swatch" style="background:#FACC15;" data-color="#FACC15" title="Classic 35mm Broadcast Yellow"></div>
+                    <div class="swatch" style="background:#38BDF8;" data-color="#38BDF8" title="High-Contrast Cyan"></div>
+                    <div class="swatch" style="background:#4ADE80;" data-color="#4ADE80" title="Night-Vision Soft Green"></div>
+                  </div>
+                </div>
+
+                <div class="section-label"><span>3. Framerate & Sync Calibration</span></div>
+                <div class="control-group">
+                  <div class="control-row">
+                    <span>Framerate Drift Multiplier</span>
+                    <span id="fps-val">1.000x (Original)</span>
+                  </div>
+                  <select id="fps-select">
+                    <option value="1">1.000x — Exact 1:1 Monotonic Clock</option>
+                    <option value="1.042709">1.0427x — PAL 25fps to 23.976fps Pull-Down</option>
+                    <option value="0.95904">0.9590x — 23.976fps to PAL 25fps Speedup</option>
+                    <option value="1.001">1.0010x — 24.00fps Cinema to 23.976fps Broadcast</option>
+                  </select>
+                </div>
+              </aside>
+
+              <!-- RIGHT LIVE FLOATING OVERLAY STAGE -->
+              <section class="stage-container" id="stage">
+                <div class="mock-os-bar">
+                  <span>📱 Simulated External Video App (Click-Through Overlay Active)</span>
+                  <span id="sync-offset-indicator">Sync Offset: +0.0s</span>
+                </div>
+
+                <div class="video-canvas">
+                  <video id="demo-video" loop muted playsinline crossorigin="anonymous"
+                    poster="https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1200&q=80">
+                    <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4" type="video/mp4">
+                  </video>
+
+                  <!-- WINDOW A: Untouchable Subtitle Layer (Unless Unlocked) -->
+                  <div id="window-a-subtitle">
+                    <div class="subtitle-box" id="subtitle-render">
+                      "Ready when you are — hit Play on the Floating Subtitle Deck!"
+                      <span class="subtitle-secondary" id="subtitle-secondary-render">[CineSub Monotonic Clock Engine Standby]</span>
+                    </div>
+                  </div>
+
+                  <!-- WINDOW B: Floating Subtitle Video Player Controller -->
+                  <div id="window-b-controller">
+                    <div class="cc-pill-minimized" id="expand-pill-btn" title="Expand Floating Subtitle Player">CC</div>
+                    <div class="deck-inner">
+                      <div class="deck-header" id="deck-drag-handle">
+                        <div class="deck-title">
+                          <span class="status-dot"></span>
+                          <span>CineSub Floating Deck</span>
+                        </div>
+                        <div class="deck-actions">
+                          <button class="icon-btn" id="lock-sub-btn" title="Unlock to Drag Subtitle Position">🔒 Pos Locked</button>
+                          <button class="icon-btn" id="collapse-deck-btn" title="Dock to Edge Pill">⎯</button>
+                        </div>
+                      </div>
+
+                      <div class="timeline-row">
+                        <span class="timestamp" id="current-time-label">00:00.0</span>
+                        <input type="range" id="timeline-scrubber" min="0" max="65000" value="0" />
+                        <span class="timestamp" id="total-time-label" style="text-align:right;">01:05.0</span>
+                      </div>
+
+                      <div class="transport-row">
+                        <button class="transport-btn" id="nudge-back-500">-0.5s</button>
+                        <button class="transport-btn" id="nudge-back-100">-0.1s</button>
+                        <button class="transport-btn primary" id="play-pause-btn">▶ Play</button>
+                        <button class="transport-btn" id="nudge-fwd-100">+0.1s</button>
+                        <button class="transport-btn" id="nudge-fwd-500">+0.5s</button>
+                      </div>
+
+                      <div class="section-label" style="margin-bottom:6px;">
+                        <span>Tap Spoken Line to Instant-Sync</span>
+                        <span id="format-detected-label" style="color:var(--accent-amber);">Built-in Demo (.ASS)</span>
+                      </div>
+                      <div class="transcript-drawer" id="transcript-list"></div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </main>
+
+            <script>
+              // =========================================================================
+              // MULTI-FORMAT UNIVERSAL SUBTITLE PARSER (.SRT, .VTT, .ASS, .SSA, .SUB, .SBV, .LRC)
+              // =========================================================================
+              const DEMO_SUBTITLES = [
+                { startMs: 0, endMs: 4200, primary: "Welcome to CineSub Pro — the Floating Subtitle Player.", secondary: "[Window A is 100% Click-Through so you never block video taps]" },
+                { startMs: 4200, endMs: 8800, primary: "Watching a foreign stream or raw video without closed captions?", secondary: "[Load any local .SRT, .VTT, .ASS, .SUB, .SBV, or .LRC file]" },
+                { startMs: 8800, endMs: 13500, primary: "Notice the Atkinson Hyperlegible & vector stroke rendering.", secondary: "[Designed specifically for instant readability over bright scenes]" },
+                { startMs: 13500, endMs: 18500, primary: "If the video player is slightly ahead or behind...", secondary: "[Tap -0.5s / +0.5s or click ANY line in the drawer to snap-sync!]" },
+                { startMs: 18500, endMs: 24000, primary: "Wait—did you hear that line right on screen?", secondary: "[Tap that line in the Floating Deck to anchor the monotonic clock]" },
+                { startMs: 24000, endMs: 30000, primary: "Unlike basic timers, our clock uses monotonic elapsedRealtime.", secondary: "[Zero drift even over a 3-hour cinema marathon]" },
+                { startMs: 30000, endMs: 36500, primary: "Unlock 'Pos Locked' to drag the subtitle box anywhere vertically.", secondary: "[Lock it again to restore 100% transparent touch pass-through]" },
+                { startMs: 36500, endMs: 43000, primary: "Collapse the controller into a tiny 'CC' edge pill anytime.", secondary: "[Tap the '⎯' button in the top-right of the floating deck]" },
+                { startMs: 43000, endMs: 51000, primary: "Supports ASS/SSA anime styling tags & dual-language tracks.", secondary: "[Automatically strips messy override tags like {\\an8} or {\\pos()}]" },
+                { startMs: 51000, endMs: 65000, primary: "Download the compiled Native Android APK from GitHub Actions Artifacts!", secondary: "[Runs over Chrome, YouTube, MX Player, or any third-party app]" }
+              ];
+
+              let cues = [...DEMO_SUBTITLES];
+              let isPlaying = false;
+              let anchorElapsedMs = 0;
+              let anchorPlaybackMs = 0;
+              let currentPlaybackMs = 0;
+              let syncOffsetMs = 0;
+              let fpsMultiplier = 1.0;
+              let subPosLocked = true;
+
+              const videoEl = document.getElementById('demo-video');
+              const subRender = document.getElementById('subtitle-render');
+              const subSecRender = document.getElementById('subtitle-secondary-render');
+              const scrubber = document.getElementById('timeline-scrubber');
+              const currentTimeLabel = document.getElementById('current-time-label');
+              const totalTimeLabel = document.getElementById('total-time-label');
+              const transcriptList = document.getElementById('transcript-list');
+              const playPauseBtn = document.getElementById('play-pause-btn');
+
+              function formatTime(ms) {
+                const clamped = Math.max(0, Math.floor(ms));
+                const totalSec = Math.floor(clamped / 1000);
+                const mins = String(Math.floor(totalSec / 60)).padStart(2, '0');
+                const secs = String(totalSec % 60).padStart(2, '0');
+                const tenths = Math.floor((clamped % 1000) / 100);
+                return `${mins}:${secs}.${tenths}`;
+              }
+
+              function cleanSubtitleText(raw) {
+                return raw
+                  .replace(/\{[^}]*\}/g, '') // Strip ASS/SSA override blocks like {\an8}
+                  .replace(/<\/?[^>]+(>|$)/g, '') // Strip HTML tags
+                  .replace(/\\N/gi, '\n')
+                  .trim();
+              }
+
+              function parseTimestampToMs(tc) {
+                const s = tc.trim().replace(',', '.');
+                const parts = s.split(':');
+                if (parts.length === 3) {
+                  return Math.round((parseFloat(parts[0]) * 3600 + parseFloat(parts[1]) * 60 + parseFloat(parts[2])) * 1000);
+                } else if (parts.length === 2) {
+                  return Math.round((parseFloat(parts[0]) * 60 + parseFloat(parts[1])) * 1000);
+                }
+                return 0;
+              }
+
+              function parseUniversalSubtitles(content, filename = '') {
+                const parsed = [];
+                const ext = filename.toLowerCase().split('.').pop();
+                const lines = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+
+                // 1. ASS / SSA Format
+                if (ext === 'ass' || ext === 'ssa' || content.includes('[Events]')) {
+                  for (const line of lines) {
+                    if (line.startsWith('Dialogue:')) {
+                      const body = line.substring(9).trim();
+                      const parts = body.split(',');
+                      if (parts.length >= 10) {
+                        const startMs = parseTimestampToMs(parts[1]);
+                        const endMs = parseTimestampToMs(parts[2]);
+                        const rawText = parts.slice(9).join(',');
+                        const textLines = cleanSubtitleText(rawText).split('\n');
+                        parsed.push({
+                          startMs,
+                          endMs,
+                          primary: textLines[0] || '',
+                          secondary: textLines.slice(1).join(' ') || ''
+                        });
+                      }
+                    }
+                  }
+                }
+                // 2. LRC Synchronized Lyrics / Captions
+                else if (ext === 'lrc' || /^\[\d{2}:\d{2}\.\d{2,3}\]/.test(content.trim())) {
+                  const temp = [];
+                  for (const line of lines) {
+                    const match = line.match(/^\[(\d{2}:\d{2}\.\d{2,3})\](.*)$/);
+                    if (match) {
+                      temp.push({ startMs: parseTimestampToMs(match[1]), text: cleanSubtitleText(match[2]) });
+                    }
+                  }
+                  for (let i = 0; i < temp.length; i++) {
+                    parsed.push({
+                      startMs: temp[i].startMs,
+                      endMs: temp[i + 1] ? temp[i + 1].startMs : temp[i].startMs + 4000,
+                      primary: temp[i].text,
+                      secondary: ''
+                    });
+                  }
+                }
+                // 3. MicroDVD .SUB ({startFrame}{endFrame}Text)
+                else if (ext === 'sub' && /^\{\d+\}\{\d+\}/.test(content.trim())) {
+                  const fps = 23.976;
+                  for (const line of lines) {
+                    const m = line.match(/^\{(\d+)\}\{(\d+)\}(.*)$/);
+                    if (m) {
+                      const startMs = Math.round((parseInt(m[1], 10) / fps) * 1000);
+                      const endMs = Math.round((parseInt(m[2], 10) / fps) * 1000);
+                      const parts = cleanSubtitleText(m[3].replace(/\|/g, '\n')).split('\n');
+                      parsed.push({ startMs, endMs, primary: parts[0] || '', secondary: parts.slice(1).join(' ') });
+                    }
+                  }
+                }
+                // 4. SRT / WebVTT / YouTube SBV Blocks
+                else {
+                  const blocks = content.replace(/\r\n/g, '\n').split(/\n\s*\n/);
+                  for (const block of blocks) {
+                    const bLines = block.trim().split('\n');
+                    if (!bLines.length) continue;
+                    let timeIdx = bLines.findIndex(l => l.includes('-->') || /^\d+:\d+:\d+\.\d+,\d+:\d+:\d+\.\d+$/.test(l.trim()));
+                    if (timeIdx !== -1) {
+                      const tLine = bLines[timeIdx];
+                      const sep = tLine.includes('-->') ? '-->' : ',';
+                      const [sRaw, eRaw] = tLine.split(sep);
+                      const startMs = parseTimestampToMs(sRaw.trim().split(' ')[0]);
+                      const endMs = parseTimestampToMs(eRaw.trim().split(' ')[0]);
+                      const textLines = bLines.slice(timeIdx + 1).map(cleanSubtitleText).filter(Boolean);
+                      if (textLines.length) {
+                        parsed.push({
+                          startMs,
+                          endMs,
+                          primary: textLines[0],
+                          secondary: textLines.slice(1).join(' ')
+                        });
+                      }
+                    }
+                  }
+                }
+                return parsed.sort((a, b) => a.startMs - b.startMs);
+              }
+
+              function renderTranscriptDrawer() {
+                transcriptList.innerHTML = '';
+                cues.forEach((cue, idx) => {
+                  const row = document.createElement('div');
+                  row.className = 'cue-item';
+                  row.dataset.index = idx;
+                  row.innerHTML = `<span class="cue-time">${formatTime(cue.startMs)}</span><span>${cue.primary}</span>`;
+                  row.addEventListener('click', () => {
+                    seekToMs(cue.startMs);
+                  });
+                  transcriptList.appendChild(row);
+                });
+                const maxEnd = cues.length ? cues[cues.length - 1].endMs : 65000;
+                scrubber.max = maxEnd;
+                totalTimeLabel.textContent = formatTime(maxEnd);
+                document.getElementById('cue-count-badge').textContent = `${cues.length} Cues Ready`;
+              }
+
+              function seekToMs(targetMs) {
+                currentPlaybackMs = Math.max(0, targetMs);
+                anchorPlaybackMs = currentPlaybackMs;
+                anchorElapsedMs = performance.now();
+                updateOverlayFrame();
+              }
+
+              function binarySearchCue(timeMs) {
+                let low = 0, high = cues.length - 1;
+                while (low <= high) {
+                  const mid = (low + high) >> 1;
+                  const c = cues[mid];
+                  if (timeMs >= c.startMs && timeMs <= c.endMs) return mid;
+                  if (timeMs < c.startMs) high = mid - 1;
+                  else low = mid + 1;
+                }
+                return -1;
+              }
+
+              function updateOverlayFrame() {
+                if (isPlaying) {
+                  const delta = (performance.now() - anchorElapsedMs) * fpsMultiplier;
+                  currentPlaybackMs = anchorPlaybackMs + delta;
+                }
+                const effectiveMs = Math.max(0, currentPlaybackMs + syncOffsetMs);
+                scrubber.value = Math.min(scrubber.max, effectiveMs);
+                currentTimeLabel.textContent = formatTime(effectiveMs);
+
+                const activeIdx = binarySearchCue(effectiveMs);
+                const items = transcriptList.querySelectorAll('.cue-item');
+                items.forEach((el, idx) => el.classList.toggle('active', idx === activeIdx));
+
+                if (activeIdx !== -1) {
+                  const c = cues[activeIdx];
+                  subRender.childNodes[0].nodeValue = c.primary + ' ';
+                  subSecRender.textContent = c.secondary || '';
+                  subRender.style.opacity = '1';
+                } else {
+                  subRender.style.opacity = '0.18';
+                  subRender.childNodes[0].nodeValue = '• • • ';
+                  subSecRender.textContent = '';
+                }
+
+                if (isPlaying) requestAnimationFrame(updateOverlayFrame);
+              }
+
+              playPauseBtn.addEventListener('click', () => {
+                isPlaying = !isPlaying;
+                if (isPlaying) {
+                  anchorPlaybackMs = currentPlaybackMs;
+                  anchorElapsedMs = performance.now();
+                  playPauseBtn.textContent = '⏸ Pause';
+                  videoEl.play().catch(() => {});
+                  requestAnimationFrame(updateOverlayFrame);
+                } else {
+                  playPauseBtn.textContent = '▶ Play';
+                  videoEl.pause();
+                }
+              });
+
+              scrubber.addEventListener('input', (e) => seekToMs( parseFloat(e.target.value) - syncOffsetMs ));
+
+              function adjustSyncOffset(deltaMs) {
+                syncOffsetMs += deltaMs;
+                const sign = syncOffsetMs >= 0 ? '+' : '';
+                document.getElementById('sync-offset-indicator').textContent = `Sync Offset: ${sign}${(syncOffsetMs / 1000).toFixed(1)}s`;
+                updateOverlayFrame();
+              }
+
+              document.getElementById('nudge-back-500').onclick = () => adjustSyncOffset(-500);
+              document.getElementById('nudge-back-100').onclick = () => adjustSyncOffset(-100);
+              document.getElementById('nudge-fwd-100').onclick = () => adjustSyncOffset(100);
+              document.getElementById('nudge-fwd-500').onclick = () => adjustSyncOffset(500);
+
+              // File Upload Handler
+              document.getElementById('sub-file-input').addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                  const parsed = parseUniversalSubtitles(ev.target.result, file.name);
+                  if (parsed.length > 0) {
+                    cues = parsed;
+                    document.getElementById('format-detected-label').textContent = file.name;
+                    renderTranscriptDrawer();
+                    seekToMs(0);
+                  }
+                };
+                reader.readAsText(file);
+              });
+
+              // Typography Studio Controls
+              document.getElementById('font-select').addEventListener('change', (e) => {
+                document.documentElement.style.setProperty('--sub-font', e.target.value);
+              });
+              document.getElementById('font-size-slider').addEventListener('input', (e) => {
+                document.documentElement.style.setProperty('--sub-size', e.target.value + 'px');
+                document.getElementById('font-size-val').textContent = e.target.value + 'px';
+              });
+              document.getElementById('stroke-slider').addEventListener('input', (e) => {
+                document.documentElement.style.setProperty('--sub-stroke', e.target.value + 'px');
+                document.getElementById('stroke-val').textContent = e.target.value + 'px';
+              });
+              document.getElementById('bg-opacity-slider').addEventListener('input', (e) => {
+                document.documentElement.style.setProperty('--sub-bg-opacity', (e.target.value / 100).toFixed(2));
+                document.getElementById('bg-opacity-val').textContent = e.target.value + '%';
+              });
+              document.querySelectorAll('.swatch').forEach(sw => {
+                sw.addEventListener('click', () => {
+                  document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+                  sw.classList.add('active');
+                  document.documentElement.style.setProperty('--sub-color', sw.dataset.color);
+                });
+              });
+              document.getElementById('fps-select').addEventListener('change', (e) => {
+                fpsMultiplier = parseFloat(e.target.value);
+                document.getElementById('fps-val').textContent = `${fpsMultiplier.toFixed(3)}x`;
+              });
+
+              // Collapse / Expand Floating Deck
+              const controllerEl = document.getElementById('window-b-controller');
+              document.getElementById('collapse-deck-btn').onclick = (e) => {
+                e.stopPropagation();
+                controllerEl.classList.add('collapsed');
+              };
+              document.getElementById('expand-pill-btn').onclick = () => {
+                controllerEl.classList.remove('collapsed');
+              };
+
+              // Unlock / Lock Window A Subtitle Dragging
+              const winASub = document.getElementById('window-a-subtitle');
+              const lockBtn = document.getElementById('lock-sub-btn');
+              lockBtn.onclick = () => {
+                subPosLocked = !subPosLocked;
+                winASub.classList.toggle('unlocked', !subPosLocked);
+                lockBtn.classList.toggle('active', !subPosLocked);
+                lockBtn.textContent = subPosLocked ? '🔒 Pos Locked' : '✋ Drag Sub';
+              };
+
+              let draggingSub = false, subStartY = 0, subStartBottom = 110;
+              winASub.addEventListener('pointerdown', (e) => {
+                if (subPosLocked) return;
+                draggingSub = true;
+                subStartY = e.clientY;
+                subStartBottom = parseInt(getComputedStyle(winASub).bottom, 10) || 110;
+                winASub.setPointerCapture(e.pointerId);
+              });
+              winASub.addEventListener('pointermove', (e) => {
+                if (!draggingSub) return;
+                const dy = subStartY - e.clientY;
+                winASub.style.bottom = Math.max(20, Math.min(440, subStartBottom + dy)) + 'px';
+              });
+              winASub.addEventListener('pointerup', () => draggingSub = false);
+
+              renderTranscriptDrawer();
+            </script>
+          </body>
+          </html>
+          EOF
+
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web_dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  # ============================================================================
+  # JOB 2: NATIVE ANDROID APK BUILD (PURE KOTLIN + EMBEDDED CINEMA FONTS)
+  # ============================================================================
+  android-apk:
+    name: "🤖 Compile Native Android APK"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Gradle & Download Dedicated Subtitle Fonts
+        run: |
+          sudo apt-get update && sudo apt-get install -y wget unzip curl
+          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip -O /tmp/gradle.zip
+          sudo unzip -q /tmp/gradle.zip -d /opt/gradle
+          echo "/opt/gradle/gradle-8.7/bin" >> $GITHUB_PATH
+
+          mkdir -p android_app/app/src/main/assets/fonts
+          mkdir -p android_app/app/src/main/res/drawable
+          mkdir -p android_app/app/src/main/res/values
+          mkdir -p android_app/app/src/main/java/com/cinesub/overlay
+
+          # Fetch real open-source Cinema & Accessibility TTF Fonts directly into APK assets
+          curl -sL "https://github.com/google/fonts/raw/main/ofl/atkinsonhyperlegible/AtkinsonHyperlegible-Bold.ttf" \
+            -o android_app/app/src/main/assets/fonts/atkinson_hyperlegible_bold.ttf || true
+          curl -sL "https://github.com/google/fonts/raw/main/ofl/plusjakartasans/PlusJakartaSans%5Bwght%5D.ttf" \
+            -o android_app/app/src/main/assets/fonts/cinesans_bold.ttf || true
+          curl -sL "https://github.com/google/fonts/raw/main/ofl/dmmono/DMMono-Medium.ttf" \
+            -o android_app/app/src/main/assets/fonts/dm_mono_medium.ttf || true
+          curl -sL "https://github.com/google/fonts/raw/main/ofl/merriweather/Merriweather-Bold.ttf" \
+            -o android_app/app/src/main/assets/fonts/cinema_serif_bold.ttf || true
+
+      - name: Generate Android Gradle Project Configuration
+        run: |
+          cat << 'EOF' > android_app/settings.gradle
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "CineSubPro"
+          include ':app'
+          EOF
+
+          cat << 'EOF' > android_app/build.gradle
+          plugins {
+              id 'com.android.application' version '8.3.2' apply false
+              id 'org.jetbrains.kotlin.android' version '1.9.22' apply false
+          }
+          EOF
+
+          cat << 'EOF' > android_app/gradle.properties
+          org.gradle.jvmargs=-Xmx3072m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          kotlin.code.style=official
+          android.nonTransitiveRClass=true
+          EOF
+
+          cat << 'EOF' > android_app/app/build.gradle
+          plugins {
+              id 'com.android.application'
+              id 'org.jetbrains.kotlin.android'
+          }
+
+          android {
+              namespace 'com.cinesub.overlay'
+              compileSdk 34
+
+              defaultConfig {
+                  applicationId "com.cinesub.overlay"
+                  minSdk 26
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0.0-Pro"
+              }
+
+              buildTypes {
+                  debug {
+                      minifyEnabled false
+                  }
+              }
+
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+
+              kotlinOptions {
+                  jvmTarget = '17'
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.core:core-ktx:1.12.0'
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+          }
+          EOF
+
+      - name: Generate AndroidManifest.xml & Vector Icon Drawables
+        run: |
+          cat << 'EOF' > android_app/app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+              <application
+                  android:allowBackup="true"
+                  android:label="CineSub Pro"
+                  android:icon="@drawable/ic_cinesub_logo"
+                  android:roundIcon="@drawable/ic_cinesub_logo"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.Material3.Dark.NoActionBar">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:configChanges="orientation|screenSize|keyboardHidden">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+
+                  <service
+                      android:name=".FloatingSubtitleService"
+                      android:enabled="true"
+                      android:exported="false"
+                      android:foregroundServiceType="specialUse">
+                      <property
+                          android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                          android:value="floating_subtitle_video_player_overlay" />
+                  </service>
+              </application>
+          </manifest>
+          EOF
+
+          cat << 'EOF' > android_app/app/src/main/res/drawable/ic_cinesub_logo.xml
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path
+                  android:fillColor="#09090E"
+                  android:pathData="M0,0h108v108h-108z"/>
+              <path
+                  android:fillColor="#F59E0B"
+                  android:pathData="M22,30h64c4.4,0 8,3.6 8,8v32c0,4.4 -3.6,8 -8,8H22c-4.4,0 -8,-3.6 -8,-8V38C14,33.6 17.6,30 22,30z"/>
+              <path
+                  android:fillColor="#09090E"
+                  android:pathData="M28,56h32v6H28zM28,66h48v6H28z"/>
+          </vector>
+          EOF
+
+      - name: Generate Universal Subtitle Parser & Charset Sniffer (SubtitleParser.kt)
+        run: |
+          cat << 'EOF' > android_app/app/src/main/java/com/cinesub/overlay/SubtitleParser.kt
+          package com.cinesub.overlay
+
+          import java.io.BufferedInputStream
+          import java.io.InputStream
+          import java.nio.charset.Charset
+
+          data class SubtitleCue(
+              val startMs: Long,
+              val endMs: Long,
+              val primaryText: String,
+              val secondaryText: String = ""
+          )
+
+          object SubtitleRepository {
+              var activeCues: List<SubtitleCue> = getDemoCues()
+              var fileName: String = "Built-in Cinema Demo (.ASS)"
+              var fontKey: String = "atkinson"
+              var textSizeSp: Float = 22f
+              var strokeWidthPx: Float = 9f
+              var textColorHex: Int = 0xFFFFFFFF.toInt()
+              var boxBgAlpha: Int = 135
+              var fpsMultiplier: Double = 1.0
+
+              fun getDemoCues(): List<SubtitleCue> = listOf(
+                  SubtitleCue(0, 4500, "CineSub Pro Floating Player is Active!", "[Window A is 100% click-through — tap your video underneath freely]"),
+                  SubtitleCue(4500, 9500, "Switch to Chrome, YouTube, or any video app now.", "[Use the Floating Deck to Play, Pause, Scrub, or Nudge Sync]"),
+                  SubtitleCue(9500, 15000, "Hear a line in the video? Tap 'Lines' on the floating deck!", "[Tapping any spoken line snaps the monotonic clock to that exact moment]"),
+                  SubtitleCue(15000, 22000, "Rendered with Atkinson Hyperlegible & Vector Edge Strokes.", "[Zero glare even over bright white explosions or daytime scenes]"),
+                  SubtitleCue(22000, 30000, "Tap 'Lock/Drag' on the floating bar to reposition this box.", "[Collapse the floating player into a tiny 'CC' edge pill anytime]"),
+                  SubtitleCue(30000, 45000, "Supports .SRT, .VTT, .ASS, .SSA, .SUB, .SBV & .LRC locally!", "[Load any downloaded subtitle file from your phone in the CineSub studio]")
+              )
+          }
+
+          object SubtitleParser {
+
+              fun readStreamWithCharsetDetection(input: InputStream): String {
+                  val bis = BufferedInputStream(input)
+                  val bytes = bis.readBytes()
+                  if (bytes.size >= 3 &&
+                      bytes[0] == 0xEF.toByte() &&
+                      bytes[1] == 0xBB.toByte() &&
+                      bytes[2] == 0xBF.toByte()
+                  ) {
+                      return String(bytes, 3, bytes.size - 3, Charsets.UTF_8)
+                  }
+                  if (bytes.size >= 2 && bytes[0] == 0xFF.toByte() && bytes[1] == 0xFE.toByte()) {
+                      return String(bytes, 2, bytes.size - 2, Charsets.UTF_16LE)
+                  }
+                  if (bytes.size >= 2 && bytes[0] == 0xFE.toByte() && bytes[1] == 0xFF.toByte()) {
+                      return String(bytes, 2, bytes.size - 2, Charsets.UTF_16BE)
+                  }
+                  val utf8Text = String(bytes, Charsets.UTF_8)
+                  return if (utf8Text.contains('\uFFFD')) {
+                      String(bytes, Charset.forName("windows-1252"))
+                  } else {
+                      utf8Text
+                  }
+              }
+
+              private fun cleanMarkup(raw: String): String {
+                  return raw
+                      .replace(Regex("\\{[^}]*\\}"), "")
+                      .replace(Regex("</?[^>]+(>|$)"), "")
+                      .replace("\\N", "\n", ignoreCase = true)
+                      .trim()
+              }
+
+              private fun parseTimestampMs(raw: String): Long {
+                  val clean = raw.trim().replace(',', '.')
+                  val parts = clean.split(':')
+                  return try {
+                      when (parts.size) {
+                          3 -> {
+                              val h = parts[0].toLong()
+                              val m = parts[1].toLong()
+                              val s = parts[2].toDouble()
+                              ((h * 3600 + m * 60 + s) * 1000.0).toLong()
+                          }
+                          2 -> {
+                              val m = parts[0].toLong()
+                              val s = parts[1].toDouble()
+                              ((m * 60 + s) * 1000.0).toLong()
+                          }
+                          else -> 0L
+                      }
+                  } catch (_: Exception) {
+                      0L
+                  }
+              }
+
+              fun parse(content: String, filename: String): List<SubtitleCue> {
+                  val normalized = content.replace("\r\n", "\n").replace("\r", "\n")
+                  val lines = normalized.split("\n")
+                  val cues = mutableListOf<SubtitleCue>()
+                  val lowerName = filename.lowercase()
+
+                  // 1. ASS / SSA Advanced SubStation Alpha
+                  if (lowerName.endsWith(".ass") || lowerName.endsWith(".ssa") || normalized.contains("[Events]")) {
+                      for (line in lines) {
+                          if (line.startsWith("Dialogue:")) {
+                              val body = line.removePrefix("Dialogue:").trim()
+                              val parts = body.split(",", limit = 10)
+                              if (parts.size >= 10) {
+                                  val start = parseTimestampMs(parts[1])
+                                  val end = parseTimestampMs(parts[2])
+                                  val textParts = cleanMarkup(parts[9]).split("\n").filter { it.isNotBlank() }
+                                  if (textParts.isNotEmpty()) {
+                                      cues.add(
+                                          SubtitleCue(
+                                              startMs = start,
+                                              endMs = end,
+                                              primaryText = textParts.first(),
+                                              secondaryText = textParts.drop(1).joinToString(" ")
+                                          )
+                                      )
+                                  }
+                              }
+                          }
+                      }
+                  }
+                  // 2. MicroDVD .SUB ({startFrame}{endFrame}Line)
+                  else if (lowerName.endsWith(".sub") && normalized.trimStart().startsWith("{")) {
+                      val fps = 23.976
+                      val regex = Regex("^\\{(\\d+)\\}\\{(\\d+)\\}(.*)$")
+                      for (line in lines) {
+                          val m = regex.find(line.trim()) ?: continue
+                          val sFrame = m.groupValues[1].toLongOrNull() ?: continue
+                          val eFrame = m.groupValues[2].toLongOrNull() ?: continue
+                          val textParts = cleanMarkup(m.groupValues[3].replace("|", "\n")).split("\n").filter { it.isNotBlank() }
+                          if (textParts.isNotEmpty()) {
+                              cues.add(
+                                  SubtitleCue(
+                                      startMs = ((sFrame / fps) * 1000.0).toLong(),
+                                      endMs = ((eFrame / fps) * 1000.0).toLong(),
+                                      primaryText = textParts.first(),
+                                      secondaryText = textParts.drop(1).joinToString(" ")
+                                  )
+                              )
+                          }
+                      }
+                  }
+                  // 3. LRC Synchronized Captions
+                  else if (lowerName.endsWith(".lrc")) {
+                      val regex = Regex("^\\[(\\d{2}:\\d{2}\\.\\d{2,3})\\](.*)$")
+                      val rawList = mutableListOf<Pair<Long, String>>()
+                      for (line in lines) {
+                          val m = regex.find(line.trim()) ?: continue
+                          val start = parseTimestampMs(m.groupValues[1])
+                          val txt = cleanMarkup(m.groupValues[2])
+                          if (txt.isNotEmpty()) rawList.add(start to txt)
+                      }
+                      for (i in rawList.indices) {
+                          val start = rawList[i].first
+                          val end = if (i + 1 < rawList.size) rawList[i + 1].first else start + 4000L
+                          cues.add(SubtitleCue(start, end, rawList[i].second))
+                      }
+                  }
+                  // 4. SRT / WebVTT (.vtt) / YouTube (.sbv)
+                  else {
+                      val blocks = normalized.split(Regex("\n\\s*\n"))
+                      for (block in blocks) {
+                          val bLines = block.trim().split("\n")
+                          if (bLines.isEmpty()) continue
+                          val timeLineIdx = bLines.indexOfFirst {
+                              it.contains("-->") || it.matches(Regex("^\\d+:\\d+:\\d+\\.\\d+,\\d+:\\d+:\\d+\\.\\d+$"))
+                          }
+                          if (timeLineIdx != -1) {
+                              val tLine = bLines[timeLineIdx]
+                              val delimiter = if (tLine.contains("-->")) "-->" else ","
+                              val parts = tLine.split(delimiter)
+                              if (parts.size >= 2) {
+                                  val start = parseTimestampMs(parts[0].trim().split(" ")[0])
+                                  val end = parseTimestampMs(parts[1].trim().split(" ")[0])
+                                  val textLines = bLines.drop(timeLineIdx + 1).map { cleanMarkup(it) }.filter { it.isNotBlank() }
+                                  if (textLines.isNotEmpty()) {
+                                      cues.add(
+                                          SubtitleCue(
+                                              startMs = start,
+                                              endMs = end,
+                                              primaryText = textLines.first(),
+                                              secondaryText = textLines.drop(1).joinToString(" ")
+                                          )
+                                      )
+                                  }
+                              }
+                          }
+                      }
+                  }
+
+                  return cues.sortedBy { it.startMs }
+              }
+
+              fun findActiveCueBinarySearch(cues: List<SubtitleCue>, currentMs: Long): SubtitleCue? {
+                  var low = 0
+                  var high = cues.size - 1
+                  while (low <= high) {
+                      val mid = (low + high) ushr 1
+                      val cue = cues[mid]
+                      if (currentMs in cue.startMs..cue.endMs) {
+                          return cue
+                      } else if (currentMs < cue.startMs) {
+                          high = mid - 1
+                      } else {
+                          low = mid + 1
+                      }
+                  }
+                  return null
+              }
+          }
+          EOF
+
+      - name: Generate Custom Cinema Outlined Subtitle Canvas View (StrokedSubtitleView.kt)
+        run: |
+          cat << 'EOF' > android_app/app/src/main/java/com/cinesub/overlay/StrokedSubtitleView.kt
+          package com.cinesub.overlay
+
+          import android.content.Context
+          import android.graphics.Canvas
+          import android.graphics.Color
+          import android.graphics.Paint
+          import android.graphics.RectF
+          import android.graphics.Typeface
+          import android.text.Layout
+          import android.text.StaticLayout
+          import android.text.TextPaint
+          import android.util.TypedValue
+          import android.view.View
+
+          class StrokedSubtitleView(context: Context) : View(context) {
+
+              private val fillPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                  style = Paint.Style.FILL
+                  color = Color.WHITE
+              }
+
+              private val strokePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                  style = Paint.Style.STROKE
+                  strokeJoin = Paint.Join.ROUND
+                  strokeCap = Paint.Cap.ROUND
+                  color = Color.BLACK
+                  strokeWidth = 9f
+              }
+
+              private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                  style = Paint.Style.FILL
+                  color = Color.argb(135, 8, 8, 12)
+              }
+
+              private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                  style = Paint.Style.STROKE
+                  strokeWidth = 3f
+                  color = Color.TRANSPARENT
+              }
+
+              private val bgRect = RectF()
+              private var primaryText: String = ""
+              private var secondaryText: String = ""
+              var isUnlockedForDrag: Boolean = false
+                  set(value) {
+                      field = value
+                      borderPaint.color = if (value) Color.parseColor("#F59E0B") else Color.TRANSPARENT
+                      invalidate()
+                  }
+
+              fun updateSubtitle(primary: String, secondary: String) {
+                  if (primaryText == primary && secondaryText == secondary) return
+                  primaryText = primary
+                  secondaryText = secondary
+                  requestLayout()
+                  invalidate()
+              }
+
+              fun applyStyleFromRepo(context: Context) {
+                  val tf = loadCinemaTypeface(context, SubtitleRepository.fontKey)
+                  fillPaint.typeface = tf
+                  strokePaint.typeface = tf
+
+                  val px = TypedValue.applyDimension(
+                      TypedValue.COMPLEX_UNIT_SP,
+                      SubtitleRepository.textSizeSp,
+                      resources.displayMetrics
+                  )
+                  fillPaint.textSize = px
+                  strokePaint.textSize = px
+                  fillPaint.color = SubtitleRepository.textColorHex
+                  strokePaint.strokeWidth = SubtitleRepository.strokeWidthPx
+                  bgPaint.color = Color.argb(SubtitleRepository.boxBgAlpha, 8, 8, 12)
+                  requestLayout()
+                  invalidate()
+              }
+
+              private fun loadCinemaTypeface(context: Context, key: String): Typeface {
+                  val assetPath = when (key) {
+                      "atkinson" -> "fonts/atkinson_hyperlegible_bold.ttf"
+                      "cinesans" -> "fonts/cinesans_bold.ttf"
+                      "mono" -> "fonts/dm_mono_medium.ttf"
+                      "serif" -> "fonts/cinema_serif_bold.ttf"
+                      else -> null
+                  }
+                  if (assetPath != null) {
+                      try {
+                          return Typeface.createFromAsset(context.assets, assetPath)
+                      } catch (_: Exception) {}
+                  }
+                  return Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+              }
+
+              override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+                  val maxWidth = MeasureSpec.getSize(widthMeasureSpec).coerceAtLeast(320) - 48
+                  val combined = if (secondaryText.isNotBlank()) "$primaryText\n$secondaryText" else primaryText
+                  if (combined.isBlank()) {
+                      setMeasuredDimension(maxWidth + 48, 80)
+                      return
+                  }
+                  val layout = StaticLayout.Builder
+                      .obtain(combined, 0, combined.length, fillPaint, maxWidth)
+                      .setAlignment(Layout.Alignment.ALIGN_CENTER)
+                      .setLineSpacing(4f, 1.05f)
+                      .build()
+
+                  val desiredH = (layout.height + 44).coerceAtLeast(76)
+                  setMeasuredDimension(maxWidth + 48, desiredH)
+              }
+
+              override fun onDraw(canvas: Canvas) {
+                  super.onDraw(canvas)
+                  val combined = if (secondaryText.isNotBlank()) "$primaryText\n$secondaryText" else primaryText
+                  if (combined.isBlank() && !isUnlockedForDrag) return
+
+                  val textToRender = if (combined.isBlank()) "✋ Drag Subtitle Position Here" else combined
+                  val availWidth = (width - 48).coerceAtLeast(200)
+
+                  val strokeLayout = StaticLayout.Builder
+                      .obtain(textToRender, 0, textToRender.length, strokePaint, availWidth)
+                      .setAlignment(Layout.Alignment.ALIGN_CENTER)
+                      .setLineSpacing(4f, 1.05f)
+                      .build()
+
+                  val fillLayout = StaticLayout.Builder
+                      .obtain(textToRender, 0, textToRender.length, fillPaint, availWidth)
+                      .setAlignment(Layout.Alignment.ALIGN_CENTER)
+                      .setLineSpacing(4f, 1.05f)
+                      .build()
+
+                  var maxLineWidth = 0f
+                  for (i in 0 until fillLayout.lineCount) {
+                      maxLineWidth = maxOf(maxLineWidth, fillLayout.getLineWidth(i))
+                  }
+
+                  val boxW = (maxLineWidth + 48f).coerceAtMost(width.toFloat())
+                  val left = (width - boxW) / 2f
+                  bgRect.set(left, 6f, left + boxW, height - 6f)
+
+                  canvas.drawRoundRect(bgRect, 28f, 28f, bgPaint)
+                  if (isUnlockedForDrag) {
+                      canvas.drawRoundRect(bgRect, 28f, 28f, borderPaint)
+                  }
+
+                  canvas.save()
+                  canvas.translate(24f, 20f)
+                  if (SubtitleRepository.strokeWidthPx > 0.5f) {
+                      strokeLayout.draw(canvas)
+                  }
+                  fillLayout.draw(canvas)
+                  canvas.restore()
+              }
+          }
+          EOF
+
+      - name: Generate Dual-Window Floating Subtitle Service (FloatingSubtitleService.kt)
+        run: |
+          cat << 'EOF' > android_app/app/src/main/java/com/cinesub/overlay/FloatingSubtitleService.kt
+          package com.cinesub.overlay
+
+          import android.app.Notification
+          import android.app.NotificationChannel
+          import android.app.NotificationManager
+          import android.app.PendingIntent
+          import android.app.Service
+          import android.content.Intent
+          import android.content.res.Configuration
+          import android.graphics.Color
+          import android.graphics.PixelFormat
+          import android.graphics.Typeface
+          import android.graphics.drawable.GradientDrawable
+          import android.os.Build
+          import android.os.Handler
+          import android.os.IBinder
+          import android.os.Looper
+          import android.os.SystemClock
+          import android.util.TypedValue
+          import android.view.Gravity
+          import android.view.MotionEvent
+          import android.view.View
+          import android.view.WindowManager
+          import android.widget.Button
+          import android.widget.FrameLayout
+          import android.widget.LinearLayout
+          import android.widget.ScrollView
+          import android.widget.SeekBar
+          import android.widget.TextView
+          import kotlin.math.abs
+
+          class FloatingSubtitleService : Service() {
+
+              companion object {
+                  const val ACTION_REFRESH_STYLE = "com.cinesub.overlay.REFRESH_STYLE"
+                  const val ACTION_STOP_OVERLAY = "com.cinesub.overlay.STOP_OVERLAY"
+                  var isRunning = false
+              }
+
+              private lateinit var windowManager: WindowManager
+              private lateinit var subtitleView: StrokedSubtitleView
+              private lateinit var subtitleParams: WindowManager.LayoutParams
+
+              private lateinit var controllerRoot: FrameLayout
+              private lateinit var controllerParams: WindowManager.LayoutParams
+              private lateinit var expandedDeck: LinearLayout
+              private lateinit var collapsedPill: TextView
+              private lateinit var timeLabel: TextView
+              private lateinit var offsetLabel: TextView
+              private lateinit var playPauseBtn: Button
+              private lateinit var lockDragBtn: Button
+              private lateinit var scrubber: SeekBar
+              private lateinit var transcriptDrawer: ScrollView
+              private lateinit var transcriptContainer: LinearLayout
+
+              private val tickerHandler = Handler(Looper.getMainLooper())
+              private var isPlaying = true
+              private var anchorRealtimeMs = 0L
+              private var anchorPlaybackMs = 0L
+              private var currentPlaybackMs = 0L
+              private var syncOffsetMs = 0L
+              private var isPositionUnlocked = false
+              private var isTranscriptOpen = false
+
+              private val frameTicker = object : Runnable {
+                  override fun run() {
+                      if (isPlaying) {
+                          val elapsed = SystemClock.elapsedRealtime() - anchorRealtimeMs
+                          currentPlaybackMs = anchorPlaybackMs + (elapsed * SubtitleRepository.fpsMultiplier).toLong()
+                      }
+                      val effectiveMs = (currentPlaybackMs + syncOffsetMs).coerceAtLeast(0L)
+                      val activeCue = SubtitleParser.findActiveCueBinarySearch(SubtitleRepository.activeCues, effectiveMs)
+
+                      if (activeCue != null) {
+                          subtitleView.updateSubtitle(activeCue.primaryText, activeCue.secondaryText)
+                      } else {
+                          subtitleView.updateSubtitle("", "")
+                      }
+
+                      timeLabel.text = formatClock(effectiveMs)
+                      val maxDuration = SubtitleRepository.activeCues.lastOrNull()?.endMs?.coerceAtLeast(1000L) ?: 60000L
+                      scrubber.max = maxDuration.toInt()
+                      scrubber.progress = effectiveMs.coerceAtMost(maxDuration).toInt()
+
+                      tickerHandler.postDelayed(this, 45L)
+                  }
+              }
+
+              override fun onCreate() {
+                  super.onCreate()
+                  isRunning = true
+                  windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+                  startForegroundWithNotification()
+                  setupWindowASubtitleOverlay()
+                  setupWindowBControllerOverlay()
+
+                  anchorRealtimeMs = SystemClock.elapsedRealtime()
+                  anchorPlaybackMs = 0L
+                  tickerHandler.post(frameTicker)
+              }
+
+              override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+                  when (intent?.action) {
+                      ACTION_STOP_OVERLAY -> {
+                          stopSelf()
+                          return START_NOT_STICKY
+                      }
+                      ACTION_REFRESH_STYLE -> {
+                          subtitleView.applyStyleFromRepo(this)
+                          rebuildTranscriptRows()
+                      }
+                  }
+                  return START_STICKY
+              }
+
+              private fun setupWindowASubtitleOverlay() {
+                  subtitleView = StrokedSubtitleView(this)
+                  subtitleView.applyStyleFromRepo(this)
+
+                  val overlayType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                  subtitleParams = WindowManager.LayoutParams(
+                      (resources.displayMetrics.widthPixels * 0.90).toInt(),
+                      WindowManager.LayoutParams.WRAP_CONTENT,
+                      overlayType,
+                      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                          WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                          WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                      PixelFormat.TRANSLUCENT
+                  ).apply {
+                      gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                      y = dpToPx(88)
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                          layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                      }
+                  }
+
+                  subtitleView.setOnTouchListener(object : View.OnTouchListener {
+                      private var startRawY = 0f
+                      private var startParamY = 0
+                      override fun onTouch(v: View, event: MotionEvent): Boolean {
+                          if (!isPositionUnlocked) return false
+                          when (event.actionMasked) {
+                              MotionEvent.ACTION_DOWN -> {
+                                  startRawY = event.rawY
+                                  startParamY = subtitleParams.y
+                                  return true
+                              }
+                              MotionEvent.ACTION_MOVE -> {
+                                  val deltaY = (startRawY - event.rawY).toInt()
+                                  subtitleParams.y = (startParamY + deltaY).coerceIn(dpToPx(24), resources.displayMetrics.heightPixels - dpToPx(140))
+                                  windowManager.updateViewLayout(subtitleView, subtitleParams)
+                                  return true
+                              }
+                          }
+                          return false
+                      }
+                  })
+
+                  windowManager.addView(subtitleView, subtitleParams)
+              }
+
+              private fun setupWindowBControllerOverlay() {
+                  controllerRoot = FrameLayout(this)
+
+                  // 1. Collapsed Edge Pill ("CC")
+                  collapsedPill = TextView(this).apply {
+                      text = "CC"
+                      setTextColor(Color.parseColor("#09090B"))
+                      setTypeface(typeface, Typeface.BOLD)
+                      textSize = 14f
+                      gravity = Gravity.CENTER
+                      background = GradientDrawable().apply {
+                          shape = GradientDrawable.OVAL
+                          setColor(Color.parseColor("#F59E0B"))
+                          setStroke(dpToPx(2), Color.WHITE)
+                      }
+                      visibility = View.GONE
+                  }
+
+                  // 2. Expanded Floating Subtitle Player Deck
+                  expandedDeck = LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      setPadding(dpToPx(14), dpToPx(12), dpToPx(14), dpToPx(12))
+                      background = GradientDrawable().apply {
+                          cornerRadius = dpToPx(20).toFloat()
+                          setColor(Color.argb(232, 14, 15, 22))
+                          setStroke(dpToPx(1), Color.argb(55, 255, 255, 255))
+                      }
+                  }
+
+                  // Header Row (Drag Handle + Title + Collapse + Close)
+                  val headerRow = LinearLayout(this).apply {
+                      orientation = LinearLayout.HORIZONTAL
+                      gravity = Gravity.CENTER_VERTICAL
+                  }
+
+                  val titleTv = TextView(this).apply {
+                      text = "⠿ CineSub Deck"
+                      setTextColor(Color.WHITE)
+                      textSize = 13f
+                      setTypeface(typeface, Typeface.BOLD)
+                      layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                  }
+
+                  offsetLabel = TextView(this).apply {
+                      text = "+0.0s"
+                      setTextColor(Color.parseColor("#F59E0B"))
+                      textSize = 11f
+                      setPadding(dpToPx(6), 0, dpToPx(8), 0)
+                  }
+
+                  val minimizeBtn = createCompactButton("⎯") {
+                      expandedDeck.visibility = View.GONE
+                      collapsedPill.visibility = View.VISIBLE
+                  }
+
+                  val closeBtn = createCompactButton("✕") {
+                      stopSelf()
+                  }
+
+                  headerRow.addView(titleTv)
+                  headerRow.addView(offsetLabel)
+                  headerRow.addView(minimizeBtn)
+                  headerRow.addView(closeBtn)
+
+                  // Scrubber + Timestamp Row
+                  val scrubRow = LinearLayout(this).apply {
+                      orientation = LinearLayout.HORIZONTAL
+                      gravity = Gravity.CENTER_VERTICAL
+                      setPadding(0, dpToPx(8), 0, dpToPx(6))
+                  }
+
+                  timeLabel = TextView(this).apply {
+                      text = "00:00.0"
+                      setTextColor(Color.parseColor("#F59E0B"))
+                      textSize = 11f
+                      typeface = Typeface.MONOSPACE
+                  }
+
+                  scrubber = SeekBar(this).apply {
+                      layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                      setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                          override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
+                              if (fromUser) seekToTimestamp(progress.toLong() - syncOffsetMs)
+                          }
+                          override fun onStartTrackingTouch(sb: SeekBar?) {}
+                          override fun onStopTrackingTouch(sb: SeekBar?) {}
+                      })
+                  }
+
+                  scrubRow.addView(timeLabel)
+                  scrubRow.addView(scrubber)
+
+                  // Transport Controls Row (-0.5s, Play/Pause, +0.5s, Lines, Lock/Drag)
+                  val transportRow = LinearLayout(this).apply {
+                      orientation = LinearLayout.HORIZONTAL
+                      gravity = Gravity.CENTER
+                  }
+
+                  val nudgeBackBtn = createCompactButton("-0.5s") { adjustSyncOffset(-500L) }
+                  playPauseBtn = createCompactButton("⏸") { togglePlayPause() }.apply {
+                      setTextColor(Color.parseColor("#F59E0B"))
+                  }
+                  val nudgeFwdBtn = createCompactButton("+0.5s") { adjustSyncOffset(500L) }
+                  val linesBtn = createCompactButton("Lines") {
+                      isTranscriptOpen = !isTranscriptOpen
+                      transcriptDrawer.visibility = if (isTranscriptOpen) View.VISIBLE else View.GONE
+                  }
+                  lockDragBtn = createCompactButton("🔒 Pos") {
+                      toggleSubtitleTouchPassThrough()
+                  }
+
+                  transportRow.addView(nudgeBackBtn)
+                  transportRow.addView(playPauseBtn)
+                  transportRow.addView(nudgeFwdBtn)
+                  transportRow.addView(linesBtn)
+                  transportRow.addView(lockDragBtn)
+
+                  // Tap-to-Sync Line Picker Drawer
+                  transcriptDrawer = ScrollView(this).apply {
+                      visibility = View.GONE
+                      layoutParams = LinearLayout.LayoutParams(
+                          LinearLayout.LayoutParams.MATCH_PARENT,
+                          dpToPx(150)
+                      ).apply { topMargin = dpToPx(8) }
+                  }
+                  transcriptContainer = LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                  }
+                  transcriptDrawer.addView(transcriptContainer)
+                  rebuildTranscriptRows()
+
+                  expandedDeck.addView(headerRow)
+                  expandedDeck.addView(scrubRow)
+                  expandedDeck.addView(transportRow)
+                  expandedDeck.addView(transcriptDrawer)
+
+                  controllerRoot.addView(expandedDeck)
+                  controllerRoot.addView(collapsedPill, FrameLayout.LayoutParams(dpToPx(48), dpToPx(48)))
+
+                  controllerParams = WindowManager.LayoutParams(
+                      WindowManager.LayoutParams.WRAP_CONTENT,
+                      WindowManager.LayoutParams.WRAP_CONTENT,
+                      WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                          WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                      PixelFormat.TRANSLUCENT
+                  ).apply {
+                      gravity = Gravity.TOP or Gravity.END
+                      x = dpToPx(16)
+                      y = dpToPx(90)
+                  }
+
+                  val dragListener = object : View.OnTouchListener {
+                      private var initialX = 0
+                      private var initialY = 0
+                      private var touchX = 0f
+                      private var touchY = 0f
+                      override fun onTouch(v: View, event: MotionEvent): Boolean {
+                          when (event.actionMasked) {
+                              MotionEvent.ACTION_DOWN -> {
+                                  initialX = controllerParams.x
+                                  initialY = controllerParams.y
+                                  touchX = event.rawX
+                                  touchY = event.rawY
+                                  return true
+                              }
+                              MotionEvent.ACTION_MOVE -> {
+                                  controllerParams.x = (initialX - (event.rawX - touchX)).toInt()
+                                  controllerParams.y = (initialY + (event.rawY - touchY)).toInt()
+                                  windowManager.updateViewLayout(controllerRoot, controllerParams)
+                                  return true
+                              }
+                              MotionEvent.ACTION_UP -> {
+                                  if (abs(event.rawX - touchX) < 12 && abs(event.rawY - touchY) < 12) {
+                                      if (v == collapsedPill) {
+                                          collapsedPill.visibility = View.GONE
+                                          expandedDeck.visibility = View.VISIBLE
+                                      }
+                                  }
+                                  return true
+                              }
+                          }
+                          return false
+                      }
+                  }
+
+                  headerRow.setOnTouchListener(dragListener)
+                  collapsedPill.setOnTouchListener(dragListener)
+
+                  windowManager.addView(controllerRoot, controllerParams)
+              }
+
+              private fun rebuildTranscriptRows() {
+                  if (!::transcriptContainer.isInitialized) return
+                  transcriptContainer.removeAllViews()
+                  SubtitleRepository.activeCues.take(120).forEach { cue ->
+                      val row = TextView(this).apply {
+                          text = "${formatClock(cue.startMs)}  ${cue.primaryText}"
+                          setTextColor(Color.parseColor("#E2E8F0"))
+                          textSize = 11.5f
+                          setPadding(dpToPx(8), dpToPx(6), dpToPx(8), dpToPx(6))
+                          setOnClickListener {
+                              seekToTimestamp(cue.startMs)
+                          }
+                      }
+                      transcriptContainer.addView(row)
+                  }
+              }
+
+              private fun togglePlayPause() {
+                  isPlaying = !isPlaying
+                  if (isPlaying) {
+                      anchorPlaybackMs = currentPlaybackMs
+                      anchorRealtimeMs = SystemClock.elapsedRealtime()
+                      playPauseBtn.text = "⏸"
+                  } else {
+                      playPauseBtn.text = "▶"
+                  }
+              }
+
+              private fun seekToTimestamp(targetMs: Long) {
+                  currentPlaybackMs = targetMs.coerceAtLeast(0L)
+                  anchorPlaybackMs = currentPlaybackMs
+                  anchorRealtimeMs = SystemClock.elapsedRealtime()
+              }
+
+              private fun adjustSyncOffset(deltaMs: Long) {
+                  syncOffsetMs += deltaMs
+                  val sign = if (syncOffsetMs >= 0) "+" else ""
+                  offsetLabel.text = "${sign}${"%.1f".format(syncOffsetMs / 1000.0)}s"
+              }
+
+              private fun toggleSubtitleTouchPassThrough() {
+                  isPositionUnlocked = !isPositionUnlocked
+                  subtitleView.isUnlockedForDrag = isPositionUnlocked
+                  if (isPositionUnlocked) {
+                      subtitleParams.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                          WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                      lockDragBtn.text = "✋ Drag"
+                      lockDragBtn.setTextColor(Color.parseColor("#F59E0B"))
+                  } else {
+                      subtitleParams.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                          WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                          WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                      lockDragBtn.text = "🔒 Pos"
+                      lockDragBtn.setTextColor(Color.WHITE)
+                  }
+                  windowManager.updateViewLayout(subtitleView, subtitleParams)
+              }
+
+              private fun createCompactButton(label: String, onClick: () -> Unit): Button {
+                  return Button(this).apply {
+                      text = label
+                      isAllCaps = false
+                      textSize = 11f
+                      setTextColor(Color.WHITE)
+                      minWidth = 0
+                      minimumWidth = 0
+                      minHeight = 0
+                      minimumHeight = 0
+                      setPadding(dpToPx(9), dpToPx(6), dpToPx(9), dpToPx(6))
+                      background = GradientDrawable().apply {
+                          cornerRadius = dpToPx(10).toFloat()
+                          setColor(Color.argb(38, 255, 255, 255))
+                      }
+                      layoutParams = LinearLayout.LayoutParams(
+                          LinearLayout.LayoutParams.WRAP_CONTENT,
+                          LinearLayout.LayoutParams.WRAP_CONTENT
+                      ).apply {
+                          marginEnd = dpToPx(4)
+                      }
+                      setOnClickListener { onClick() }
+                  }
+              }
+
+              override fun onConfigurationChanged(newConfig: Configuration) {
+                  super.onConfigurationChanged(newConfig)
+                  if (::subtitleView.isInitialized) {
+                      subtitleParams.width = (resources.displayMetrics.widthPixels * 0.90).toInt()
+                      windowManager.updateViewLayout(subtitleView, subtitleParams)
+                  }
+              }
+
+              private fun startForegroundWithNotification() {
+                  val channelId = "cinesub_overlay_channel"
+                  val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      val ch = NotificationChannel(
+                          channelId,
+                          "CineSub Floating Subtitle Engine",
+                          NotificationManager.IMPORTANCE_LOW
+                      )
+                      nm.createNotificationChannel(ch)
+                  }
+
+                  val stopIntent = Intent(this, FloatingSubtitleService::class.java).apply {
+                      action = ACTION_STOP_OVERLAY
+                  }
+                  val stopPending = PendingIntent.getService(
+                      this, 1, stopIntent,
+                      PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                  )
+
+                  val openAppIntent = Intent(this, MainActivity::class.java)
+                  val openPending = PendingIntent.getActivity(
+                      this, 2, openAppIntent,
+                      PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                  )
+
+                  val notif = Notification.Builder(this, channelId)
+                      .setContentTitle("CineSub Floating Subtitles Active")
+                      .setContentText("Track: ${SubtitleRepository.fileName}")
+                      .setSmallIcon(android.R.drawable.ic_media_play)
+                      .setContentIntent(openPending)
+                      .addAction(Notification.Action.Builder(null, "Stop Overlay", stopPending).build())
+                      .setOngoing(true)
+                      .build()
+
+                  startForeground(1001, notif)
+              }
+
+              private fun formatClock(ms: Long): String {
+                  val totalSec = (ms / 1000L).coerceAtLeast(0L)
+                  val m = totalSec / 60L
+                  val s = totalSec % 60L
+                  val tenths = (ms % 1000L) / 100L
+                  return "%02d:%02d.%d".format(m, s, tenths)
+              }
+
+              private fun dpToPx(dp: Int): Int {
+                  return TypedValue.applyDimension(
+                      TypedValue.COMPLEX_UNIT_DIP,
+                      dp.toFloat(),
+                      resources.displayMetrics
+                  ).toInt()
+              }
+
+              override fun onDestroy() {
+                  isRunning = false
+                  tickerHandler.removeCallbacksAndMessages(null)
+                  if (::subtitleView.isInitialized) {
+                      try { windowManager.removeView(subtitleView) } catch (_: Exception) {}
+                  }
+                  if (::controllerRoot.isInitialized) {
+                      try { windowManager.removeView(controllerRoot) } catch (_: Exception) {}
+                  }
+                  super.onDestroy()
+              }
+
+              override fun onBind(intent: Intent?): IBinder? = null
+          }
+          EOF
+
+      - name: Generate Infuse-Inspired Studio Dashboard Activity (MainActivity.kt)
+        run: |
+          cat << 'EOF' > android_app/app/src/main/java/com/cinesub/overlay/MainActivity.kt
+          package com.cinesub.overlay
+
+          import android.content.Intent
+          import android.graphics.Color
+          import android.graphics.Typeface
+          import android.graphics.drawable.GradientDrawable
+          import android.net.Uri
+          import android.os.Build
+          import android.os.Bundle
+          import android.os.PowerManager
+          import android.provider.OpenableColumns
+          import android.provider.Settings
+          import android.util.TypedValue
+          import android.view.Gravity
+          import android.widget.Button
+          import android.widget.LinearLayout
+          import android.widget.ScrollView
+          import android.widget.SeekBar
+          import android.widget.TextView
+          import android.widget.Toast
+          import androidx.activity.result.contract.ActivityResultContracts
+          import androidx.appcompat.app.AppCompatActivity
+
+          class MainActivity : AppCompatActivity() {
+
+              private lateinit var statusBadge: TextView
+              private lateinit var activeFileTv: TextView
+              private lateinit var previewSubView: StrokedSubtitleView
+
+              private val subtitleFileLauncher = registerForActivityResult(
+                  ActivityResultContracts.OpenDocument()
+              ) { uri: Uri? ->
+                  if (uri != null) {
+                      loadSubtitleFromUri(uri)
+                  }
+              }
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  window.statusBarColor = Color.parseColor("#08080C")
+                  window.navigationBarColor = Color.parseColor("#08080C")
+
+                  val rootScroll = ScrollView(this).apply {
+                      setBackgroundColor(Color.parseColor("#08080C"))
+                      isFillViewport = true
+                  }
+
+                  val container = LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      setPadding(dp(20), dp(24), dp(20), dp(40))
+                  }
+
+                  // Top Brand Header
+                  val headerTitle = TextView(this).apply {
+                      text = "CineSub Pro"
+                      setTextColor(Color.WHITE)
+                      textSize = 28f
+                      setTypeface(typeface, Typeface.BOLD)
+                  }
+                  val headerSub = TextView(this).apply {
+                      text = "Floating Subtitle Player • Dual-Window Click-Through Engine"
+                      setTextColor(Color.parseColor("#94A3B8"))
+                      textSize = 13f
+                      setPadding(0, dp(4), 0, dp(18))
+                  }
+                  container.addView(headerTitle)
+                  container.addView(headerSub)
+
+                  // CARD 1: System Overlay & Battery Guard Wizard
+                  val permCard = createGlassCard()
+                  permCard.addView(createSectionLabel("1. ANDROID OVERLAY & SURVIVAL PERMISSIONS"))
+
+                  statusBadge = TextView(this).apply {
+                      textSize = 13f
+                      setPadding(0, dp(6), 0, dp(10))
+                  }
+                  permCard.addView(statusBadge)
+
+                  val permRow = LinearLayout(this).apply {
+                      orientation = LinearLayout.HORIZONTAL
+                  }
+                  val grantOverlayBtn = createAccentButton("Grant Overlay Permission", "#334155", "#FFFFFF") {
+                      if (!Settings.canDrawOverlays(this)) {
+                          val intent = Intent(
+                              Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                              Uri.parse("package:$packageName")
+                          )
+                          startActivity(intent)
+                      } else {
+                          Toast.makeText(this, "Overlay Permission Already Granted!", Toast.LENGTH_SHORT).show()
+                      }
+                  }.apply {
+                      layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                          marginEnd = dp(8)
+                      }
+                  }
+
+                  val batteryBtn = createAccentButton("Unrestrict Battery", "#1E293B", "#CBD5E1") {
+                      val pm = getSystemService(POWER_SERVICE) as PowerManager
+                      if (!pm.isIgnoringBatteryOptimizations(packageName)) {
+                          val i = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                              data = Uri.parse("package:$packageName")
+                          }
+                          startActivity(i)
+                      } else {
+                          Toast.makeText(this, "Battery Unrestricted!", Toast.LENGTH_SHORT).show()
+                      }
+                  }.apply {
+                      layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                  }
+
+                  permRow.addView(grantOverlayBtn)
+                  permRow.addView(batteryBtn)
+                  permCard.addView(permRow)
+                  container.addView(permCard)
+
+                  // CARD 2: Multi-Format Local Subtitle Picker
+                  val fileCard = createGlassCard()
+                  fileCard.addView(createSectionLabel("2. UNIVERSAL SUBTITLE LOADER (.SRT .VTT .ASS .SSA .SUB .SBV .LRC)"))
+
+                  activeFileTv = TextView(this).apply {
+                      text = "Loaded: ${SubtitleRepository.fileName} (${SubtitleRepository.activeCues.size} cues)"
+                      setTextColor(Color.parseColor("#F59E0B"))
+                      textSize = 13.5f
+                      setTypeface(typeface, Typeface.BOLD)
+                      setPadding(0, dp(6), 0, dp(12))
+                  }
+                  fileCard.addView(activeFileTv)
+
+                  val pickFileBtn = createAccentButton("📂 Load Local Subtitle File", "#F59E0B", "#09090B") {
+                      subtitleFileLauncher.launch(arrayOf("*/*"))
+                  }
+                  fileCard.addView(pickFileBtn)
+                  container.addView(fileCard)
+
+                  // CARD 3: Live Subtitle Preview & Dedicated Subtitle Fonts
+                  val styleCard = createGlassCard()
+                  styleCard.addView(createSectionLabel("3. CINEMA TYPOGRAPHY & ANTI-GLARE STUDIO"))
+
+                  previewSubView = StrokedSubtitleView(this).apply {
+                      layoutParams = LinearLayout.LayoutParams(
+                          LinearLayout.LayoutParams.MATCH_PARENT,
+                          dp(96)
+                      ).apply {
+                          topMargin = dp(8)
+                          bottomMargin = dp(12)
+                      }
+                      applyStyleFromRepo(this@MainActivity)
+                      updateSubtitle("The quick brown fox jumps over the lazy dog.", "[Live Cinema Font & Stroke Preview]")
+                  }
+                  styleCard.addView(previewSubView)
+
+                  // Font Selector Chips
+                  val fontRow = LinearLayout(this).apply {
+                      orientation = LinearLayout.HORIZONTAL
+                      setPadding(0, 0, 0, dp(12))
+                  }
+                  val fonts = listOf(
+                      "atkinson" to "Atkinson",
+                      "cinesans" to "CineSans",
+                      "serif" to "Criterion",
+                      "mono" to "SDH Mono"
+                  )
+                  fonts.forEach { (key, label) ->
+                      val btn = createAccentButton(label, "#1E293B", "#F8FAFC") {
+                          SubtitleRepository.fontKey = key
+                          refreshLiveStyle()
+                      }.apply {
+                          layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                              marginEnd = dp(6)
+                          }
+                      }
+                      fontRow.addView(btn)
+                  }
+                  styleCard.addView(fontRow)
+
+                  // Font Size Slider
+                  val sizeLabel = TextView(this).apply {
+                      text = "Subtitle Size: ${SubtitleRepository.textSizeSp.toInt()}sp"
+                      setTextColor(Color.WHITE)
+                      textSize = 12.5f
+                  }
+                  val sizeSeek = SeekBar(this).apply {
+                      max = 38
+                      progress = SubtitleRepository.textSizeSp.toInt()
+                      setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                          override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
+                              val sz = p.coerceAtLeast(14).toFloat()
+                              SubtitleRepository.textSizeSp = sz
+                              sizeLabel.text = "Subtitle Size: ${sz.toInt()}sp"
+                              refreshLiveStyle()
+                          }
+                          override fun onStartTrackingTouch(s: SeekBar?) {}
+                          override fun onStopTrackingTouch(s: SeekBar?) {}
+                      })
+                  }
+                  styleCard.addView(sizeLabel)
+                  styleCard.addView(sizeSeek)
+
+                  // Vector Stroke Thickness Slider
+                  val strokeLabel = TextView(this).apply {
+                      text = "Vector Outline Stroke: ${SubtitleRepository.strokeWidthPx.toInt()}px"
+                      setTextColor(Color.WHITE)
+                      textSize = 12.5f
+                      setPadding(0, dp(8), 0, 0)
+                  }
+                  val strokeSeek = SeekBar(this).apply {
+                      max = 18
+                      progress = SubtitleRepository.strokeWidthPx.toInt()
+                      setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                          override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
+                              SubtitleRepository.strokeWidthPx = p.toFloat()
+                              strokeLabel.text = "Vector Outline Stroke: ${p}px"
+                              refreshLiveStyle()
+                          }
+                          override fun onStartTrackingTouch(s: SeekBar?) {}
+                          override fun onStopTrackingTouch(s: SeekBar?) {}
+                      })
+                  }
+                  styleCard.addView(strokeLabel)
+                  styleCard.addView(strokeSeek)
+
+                  // Color Swatch Row
+                  val colorRow = LinearLayout(this).apply {
+                      orientation = LinearLayout.HORIZONTAL
+                      setPadding(0, dp(12), 0, 0)
+                  }
+                  val colors = listOf(
+                      "White" to Color.WHITE,
+                      "Cinema Yellow" to Color.parseColor("#FACC15"),
+                      "Cyan" to Color.parseColor("#38BDF8"),
+                      "Soft Green" to Color.parseColor("#4ADE80")
+                  )
+                  colors.forEach { (name, col) ->
+                      val cBtn = createAccentButton(name, "#1E293B", "#FFFFFF") {
+                          SubtitleRepository.textColorHex = col
+                          refreshLiveStyle()
+                      }.apply {
+                          setTextColor(col)
+                          layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                              marginEnd = dp(6)
+                          }
+                      }
+                      colorRow.addView(cBtn)
+                  }
+                  styleCard.addView(colorRow)
+                  container.addView(styleCard)
+
+                  // LAUNCH / STOP FLOATING PLAYER CTA
+                  val launchBtn = createAccentButton("🚀 Launch Floating Subtitle Player", "#F59E0B", "#09090B") {
+                      if (!Settings.canDrawOverlays(this)) {
+                          Toast.makeText(this, "Please grant 'Draw Over Other Apps' permission first!", Toast.LENGTH_LONG).show()
+                          val intent = Intent(
+                              Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                              Uri.parse("package:$packageName")
+                          )
+                          startActivity(intent)
+                      } else {
+                          val serviceIntent = Intent(this, FloatingSubtitleService::class.java)
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                              startForegroundService(serviceIntent)
+                          } else {
+                              startService(serviceIntent)
+                          }
+                          Toast.makeText(this, "Floating Player Active! Switch to your video app.", Toast.LENGTH_LONG).show()
+                      }
+                  }.apply {
+                      textSize = 15f
+                      setPadding(dp(16), dp(16), dp(16), dp(16))
+                  }
+                  container.addView(launchBtn)
+
+                  val stopBtn = createAccentButton("⏹ Stop Floating Player", "#1E293B", "#F87171") {
+                      stopService(Intent(this, FloatingSubtitleService::class.java))
+                      Toast.makeText(this, "Floating Subtitle Overlay Stopped", Toast.LENGTH_SHORT).show()
+                  }.apply {
+                      layoutParams = LinearLayout.LayoutParams(
+                          LinearLayout.LayoutParams.MATCH_PARENT,
+                          LinearLayout.LayoutParams.WRAP_CONTENT
+                      ).apply { topMargin = dp(10) }
+                  }
+                  container.addView(stopBtn)
+
+                  rootScroll.addView(container)
+                  setContentView(rootScroll)
+              }
+
+              override fun onResume() {
+                  super.onResume()
+                  val hasOverlay = Settings.canDrawOverlays(this)
+                  statusBadge.text = if (hasOverlay) {
+                      "✅ Overlay Permission Ready — You can launch over any video app"
+                  } else {
+                      "⚠️ Step 1 Required: Grant 'Draw over other apps' permission below"
+                  }
+                  statusBadge.setTextColor(
+                      if (hasOverlay) Color.parseColor("#10B981") else Color.parseColor("#F59E0B")
+                  )
+              }
+
+              private fun loadSubtitleFromUri(uri: Uri) {
+                  try {
+                      var displayName = "Custom_Subtitles.srt"
+                      contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                          val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                          if (cursor.moveToFirst() && nameIndex >= 0) {
+                              displayName = cursor.getString(nameIndex)
+                          }
+                      }
+                      contentResolver.openInputStream(uri)?.use { stream ->
+                          val text = SubtitleParser.readStreamWithCharsetDetection(stream)
+                          val parsed = SubtitleParser.parse(text, displayName)
+                          if (parsed.isNotEmpty()) {
+                              SubtitleRepository.activeCues = parsed
+                              SubtitleRepository.fileName = displayName
+                              activeFileTv.text = "Loaded: $displayName (${parsed.size} cues)"
+                              refreshLiveStyle()
+                              Toast.makeText(this, "Loaded ${parsed.size} subtitle lines!", Toast.LENGTH_SHORT).show()
+                          } else {
+                              Toast.makeText(this, "No valid subtitle timestamps found in file.", Toast.LENGTH_LONG).show()
+                          }
+                      }
+                  } catch (e: Exception) {
+                      Toast.makeText(this, "Error reading file: ${e.message}", Toast.LENGTH_LONG).show()
+                  }
+              }
+
+              private fun refreshLiveStyle() {
+                  previewSubView.applyStyleFromRepo(this)
+                  if (FloatingSubtitleService.isRunning) {
+                      val intent = Intent(this, FloatingSubtitleService::class.java).apply {
+                          action = FloatingSubtitleService.ACTION_REFRESH_STYLE
+                      }
+                      startService(intent)
+                  }
+              }
+
+              private fun createGlassCard(): LinearLayout {
+                  return LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      setPadding(dp(16), dp(16), dp(16), dp(16))
+                      background = GradientDrawable().apply {
+                          cornerRadius = dp(18).toFloat()
+                          setColor(Color.parseColor("#12131A"))
+                          setStroke(dp(1), Color.parseColor("#22FFFFFF"))
+                      }
+                      layoutParams = LinearLayout.LayoutParams(
+                          LinearLayout.LayoutParams.MATCH_PARENT,
+                          LinearLayout.LayoutParams.WRAP_CONTENT
+                      ).apply { bottomMargin = dp(16) }
+                  }
+              }
+
+              private fun createSectionLabel(txt: String): TextView {
+                  return TextView(this).apply {
+                      text = txt
+                      setTextColor(Color.parseColor("#94A3B8"))
+                      textSize = 11f
+                      setTypeface(typeface, Typeface.BOLD)
+                      letterSpacing = 0.08f
+                  }
+              }
+
+              private fun createAccentButton(label: String, bgHex: String, fgHex: String, onClick: () -> Unit): Button {
+                  return Button(this).apply {
+                      text = label
+                      isAllCaps = false
+                      setTextColor(Color.parseColor(fgHex))
+                      textSize = 12.5f
+                      setTypeface(typeface, Typeface.BOLD)
+                      gravity = Gravity.CENTER
+                      background = GradientDrawable().apply {
+                          cornerRadius = dp(12).toFloat()
+                          setColor(Color.parseColor(bgHex))
+                      }
+                      setOnClickListener { onClick() }
+                  }
+              }
+
+              private fun dp(value: Int): Int {
+                  return TypedValue.applyDimension(
+                      TypedValue.COMPLEX_UNIT_DIP,
+                      value.toFloat(),
+                      resources.displayMetrics
+                  ).toInt()
+              }
+          }
+          EOF
+
+      - name: Compile Debug APK with Plain Console Logs
+        working-directory: android_app
+        run: |
+          gradle assembleDebug --console=plain
+
+      - name: Upload Compiled Android APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CineSub-Floating-Player-APK
+          path: android_app/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
