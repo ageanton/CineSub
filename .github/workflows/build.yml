@@ -1,4 +1,4 @@
-name: Build CineSub Pro (Native Android APK Only)
+name: Build CineSub Pro APK
 
 on:
   push:
@@ -8,45 +8,59 @@ on:
 permissions:
   contents: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   android-apk:
-    name: "🤖 Compile Native Android APK"
-    runs-on: ubuntu-latest
+    name: "Compile Native Android APK"
+    runs-on: ubuntu-24.04
     steps:
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Gradle & Fetch Dedicated Cinema Subtitle Fonts
+      - name: Generate Entire Android Project & Download Subtitle Fonts
+        shell: bash
         run: |
-          sudo apt-get update && sudo apt-get install -y wget unzip curl
-          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip -O /tmp/gradle.zip
-          sudo unzip -q /tmp/gradle.zip -d /opt/gradle
-          echo "/opt/gradle/gradle-8.7/bin" >> $GITHUB_PATH
+          set -e
+          python3 - << 'PYEOF'
+          import os
+          import urllib.request
 
-          mkdir -p android_app/app/src/main/assets/fonts
-          mkdir -p android_app/app/src/main/res/drawable
-          mkdir -p android_app/app/src/main/res/values
-          mkdir -p android_app/app/src/main/java/com/cinesub/overlay
+          base = "android_app"
+          dirs = [
+              f"{base}/app/src/main/assets/fonts",
+              f"{base}/app/src/main/res/drawable",
+              f"{base}/app/src/main/res/values",
+              f"{base}/app/src/main/java/com/cinesub/overlay",
+          ]
+          for d in dirs:
+              os.makedirs(d, exist_ok=True)
 
-          # Download dedicated high-legibility subtitle TTF fonts into APK assets
-          curl -sL "https://github.com/google/fonts/raw/main/ofl/atkinsonhyperlegible/AtkinsonHyperlegible-Bold.ttf" \
-            -o android_app/app/src/main/assets/fonts/atkinson_hyperlegible_bold.ttf || true
-          curl -sL "https://github.com/google/fonts/raw/main/ofl/plusjakartasans/PlusJakartaSans%5Bwght%5D.ttf" \
-            -o android_app/app/src/main/assets/fonts/cinesans_bold.ttf || true
-          curl -sL "https://github.com/google/fonts/raw/main/ofl/dmmono/DMMono-Medium.ttf" \
-            -o android_app/app/src/main/assets/fonts/dm_mono_medium.ttf || true
-          curl -sL "https://github.com/google/fonts/raw/main/ofl/merriweather/Merriweather-Bold.ttf" \
-            -o android_app/app/src/main/assets/fonts/cinema_serif_bold.ttf || true
+          # Download dedicated cinema subtitle fonts (with safe fallback if offline)
+          fonts = {
+              "atkinson_hyperlegible_bold.ttf": "https://raw.githubusercontent.com/google/fonts/main/ofl/atkinsonhyperlegible/AtkinsonHyperlegible-Bold.ttf",
+              "cinesans_bold.ttf": "https://raw.githubusercontent.com/google/fonts/main/ofl/plusjakartasans/PlusJakartaSans%5Bwght%5D.ttf",
+              "dm_mono_medium.ttf": "https://raw.githubusercontent.com/google/fonts/main/ofl/dmmono/DMMono-Medium.ttf",
+          }
+          for fname, url in fonts.items():
+              dest = f"{base}/app/src/main/assets/fonts/{fname}"
+              try:
+                  urllib.request.urlretrieve(url, dest)
+                  if os.path.getsize(dest) < 5000:
+                      os.remove(dest)
+              except Exception:
+                  if os.path.exists(dest):
+                      os.remove(dest)
 
-      - name: Generate Android Gradle Project Configuration
-        run: |
-          cat << 'EOF' > android_app/settings.gradle
+          def write_file(path, content):
+              with open(path, "w", encoding="utf-8") as f:
+                  f.write(content.strip() + "\n")
+
+          write_file(f"{base}/settings.gradle", """
           pluginManagement {
               repositories {
                   google()
@@ -63,23 +77,23 @@ jobs:
           }
           rootProject.name = "CineSubPro"
           include ':app'
-          EOF
+          """)
 
-          cat << 'EOF' > android_app/build.gradle
+          write_file(f"{base}/build.gradle", """
           plugins {
               id 'com.android.application' version '8.3.2' apply false
               id 'org.jetbrains.kotlin.android' version '1.9.22' apply false
           }
-          EOF
+          """)
 
-          cat << 'EOF' > android_app/gradle.properties
+          write_file(f"{base}/gradle.properties", """
           org.gradle.jvmargs=-Xmx3072m -Dfile.encoding=UTF-8
           android.useAndroidX=true
           kotlin.code.style=official
           android.nonTransitiveRClass=true
-          EOF
+          """)
 
-          cat << 'EOF' > android_app/app/build.gradle
+          write_file(f"{base}/app/build.gradle", """
           plugins {
               id 'com.android.application'
               id 'org.jetbrains.kotlin.android'
@@ -93,8 +107,8 @@ jobs:
                   applicationId "com.cinesub.overlay"
                   minSdk 26
                   targetSdk 34
-                  versionCode 2
-                  versionName "1.1.0-Pro"
+                  versionCode 3
+                  versionName "1.2.0-Pro"
               }
 
               buildTypes {
@@ -118,11 +132,9 @@ jobs:
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
           }
-          EOF
+          """)
 
-      - name: Generate AndroidManifest.xml & App Vector Icon
-        run: |
-          cat << 'EOF' > android_app/app/src/main/AndroidManifest.xml
+          write_file(f"{base}/app/src/main/AndroidManifest.xml", """
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
@@ -161,9 +173,9 @@ jobs:
                   </service>
               </application>
           </manifest>
-          EOF
+          """)
 
-          cat << 'EOF' > android_app/app/src/main/res/drawable/ic_cinesub_logo.xml
+          write_file(f"{base}/app/src/main/res/drawable/ic_cinesub_logo.xml", """
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
               android:width="108dp"
               android:height="108dp"
@@ -179,11 +191,9 @@ jobs:
                   android:fillColor="#09090E"
                   android:pathData="M28,56h32v6H28zM28,66h48v6H28z"/>
           </vector>
-          EOF
+          """)
 
-      - name: Generate Universal Subtitle Parser & Charset Sniffer (SubtitleParser.kt)
-        run: |
-          cat << 'EOF' > android_app/app/src/main/java/com/cinesub/overlay/SubtitleParser.kt
+          write_file(f"{base}/app/src/main/java/com/cinesub/overlay/SubtitleParser.kt", """
           package com.cinesub.overlay
 
           import java.io.BufferedInputStream
@@ -212,7 +222,7 @@ jobs:
                   SubtitleCue(4500, 9500, "Switch to Chrome, YouTube, or any video app now.", "[Use the Floating Deck to Play, Pause, Scrub, or Nudge Sync]"),
                   SubtitleCue(9500, 15000, "Hear a line in the video? Tap 'Lines' on the floating deck!", "[Tapping any spoken line snaps the monotonic clock to that exact moment]"),
                   SubtitleCue(15000, 22000, "Rendered with Atkinson Hyperlegible & Vector Edge Strokes.", "[Zero glare even over bright white explosions or daytime scenes]"),
-                  SubtitleCue(22000, 30000, "Tap 'Lock/Drag' on the floating bar to reposition this box.", "[Collapse the floating player into a tiny 'CC' edge pill anytime]"),
+                  SubtitleCue(22000, 30000, "Tap 'Pos' on the floating bar to unlock and drag this box.", "[Collapse the floating player into a tiny 'CC' edge pill anytime]"),
                   SubtitleCue(30000, 45000, "Supports .SRT, .VTT, .ASS, .SSA, .SUB, .SBV & .LRC locally!", "[Load any downloaded subtitle file from your phone in the CineSub studio]")
               )
           }
@@ -236,7 +246,7 @@ jobs:
                       return String(bytes, 2, bytes.size - 2, Charsets.UTF_16BE)
                   }
                   val utf8Text = String(bytes, Charsets.UTF_8)
-                  return if (utf8Text.contains('\uFFFD')) {
+                  return if (utf8Text.contains('\\uFFFD')) {
                       String(bytes, Charset.forName("windows-1252"))
                   } else {
                       utf8Text
@@ -245,9 +255,9 @@ jobs:
 
               private fun cleanMarkup(raw: String): String {
                   return raw
-                      .replace(Regex("\\{[^}]*\\}"), "")
+                      .replace(Regex("\\\\{[^}]*\\\\}"), "")
                       .replace(Regex("</?[^>]+(>|$)"), "")
-                      .replace("\\N", "\n", ignoreCase = true)
+                      .replace("\\\\N", "\\n", ignoreCase = true)
                       .trim()
               }
 
@@ -275,12 +285,11 @@ jobs:
               }
 
               fun parse(content: String, filename: String): List<SubtitleCue> {
-                  val normalized = content.replace("\r\n", "\n").replace("\r", "\n")
-                  val lines = normalized.split("\n")
+                  val normalized = content.replace("\\r\\n", "\\n").replace("\\r", "\\n")
+                  val lines = normalized.split("\\n")
                   val cues = mutableListOf<SubtitleCue>()
                   val lowerName = filename.lowercase()
 
-                  // 1. ASS / SSA Advanced SubStation Alpha
                   if (lowerName.endsWith(".ass") || lowerName.endsWith(".ssa") || normalized.contains("[Events]")) {
                       for (line in lines) {
                           if (line.startsWith("Dialogue:")) {
@@ -289,7 +298,7 @@ jobs:
                               if (parts.size >= 10) {
                                   val start = parseTimestampMs(parts[1])
                                   val end = parseTimestampMs(parts[2])
-                                  val textParts = cleanMarkup(parts[9]).split("\n").filter { it.isNotBlank() }
+                                  val textParts = cleanMarkup(parts[9]).split("\\n").filter { it.isNotBlank() }
                                   if (textParts.isNotEmpty()) {
                                       cues.add(
                                           SubtitleCue(
@@ -303,16 +312,14 @@ jobs:
                               }
                           }
                       }
-                  }
-                  // 2. MicroDVD .SUB ({startFrame}{endFrame}Line)
-                  else if (lowerName.endsWith(".sub") && normalized.trimStart().startsWith("{")) {
+                  } else if (lowerName.endsWith(".sub") && normalized.trimStart().startsWith("{")) {
                       val fps = 23.976
-                      val regex = Regex("^\\{(\\d+)\\}\\{(\\d+)\\}(.*)$")
+                      val regex = Regex("^\\\\{(\\\\d+)\\\\}\\\\{(\\\\d+)\\\\}(.*)$")
                       for (line in lines) {
                           val m = regex.find(line.trim()) ?: continue
                           val sFrame = m.groupValues[1].toLongOrNull() ?: continue
                           val eFrame = m.groupValues[2].toLongOrNull() ?: continue
-                          val textParts = cleanMarkup(m.groupValues[3].replace("|", "\n")).split("\n").filter { it.isNotBlank() }
+                          val textParts = cleanMarkup(m.groupValues[3].replace("|", "\\n")).split("\\n").filter { it.isNotBlank() }
                           if (textParts.isNotEmpty()) {
                               cues.add(
                                   SubtitleCue(
@@ -324,10 +331,8 @@ jobs:
                               )
                           }
                       }
-                  }
-                  // 3. LRC Synchronized Captions
-                  else if (lowerName.endsWith(".lrc")) {
-                      val regex = Regex("^\\[(\\d{2}:\\d{2}\\.\\d{2,3})\\](.*)$")
+                  } else if (lowerName.endsWith(".lrc")) {
+                      val regex = Regex("^\\\\[(\\\\d{2}:\\\\d{2}\\\\.\\\\d{2,3})\\\\](.*)$")
                       val rawList = mutableListOf<Pair<Long, String>>()
                       for (line in lines) {
                           val m = regex.find(line.trim()) ?: continue
@@ -340,15 +345,13 @@ jobs:
                           val end = if (i + 1 < rawList.size) rawList[i + 1].first else start + 4000L
                           cues.add(SubtitleCue(start, end, rawList[i].second))
                       }
-                  }
-                  // 4. SRT / WebVTT (.vtt) / YouTube (.sbv)
-                  else {
-                      val blocks = normalized.split(Regex("\n\\s*\n"))
+                  } else {
+                      val blocks = normalized.split(Regex("\\n\\\\s*\\n"))
                       for (block in blocks) {
-                          val bLines = block.trim().split("\n")
+                          val bLines = block.trim().split("\\n")
                           if (bLines.isEmpty()) continue
                           val timeLineIdx = bLines.indexOfFirst {
-                              it.contains("-->") || it.matches(Regex("^\\d+:\\d+:\\d+\\.\\d+,\\d+:\\d+:\\d+\\.\\d+$"))
+                              it.contains("-->") || it.matches(Regex("^\\\\d+:\\\\d+:\\\\d+\\\\.\\\\d+,\\\\d+:\\\\d+:\\\\d+\\\\.\\\\d+$"))
                           }
                           if (timeLineIdx != -1) {
                               val tLine = bLines[timeLineIdx]
@@ -393,11 +396,9 @@ jobs:
                   return null
               }
           }
-          EOF
+          """)
 
-      - name: Generate Custom Cinema Outlined Subtitle Canvas View (StrokedSubtitleView.kt)
-        run: |
-          cat << 'EOF' > android_app/app/src/main/java/com/cinesub/overlay/StrokedSubtitleView.kt
+          write_file(f"{base}/app/src/main/java/com/cinesub/overlay/StrokedSubtitleView.kt", """
           package com.cinesub.overlay
 
           import android.content.Context
@@ -480,7 +481,6 @@ jobs:
                       "atkinson" -> "fonts/atkinson_hyperlegible_bold.ttf"
                       "cinesans" -> "fonts/cinesans_bold.ttf"
                       "mono" -> "fonts/dm_mono_medium.ttf"
-                      "serif" -> "fonts/cinema_serif_bold.ttf"
                       else -> null
                   }
                   if (assetPath != null) {
@@ -488,12 +488,16 @@ jobs:
                           return Typeface.createFromAsset(context.assets, assetPath)
                       } catch (_: Exception) {}
                   }
-                  return Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                  return if (key == "serif") {
+                      Typeface.create(Typeface.SERIF, Typeface.BOLD)
+                  } else {
+                      Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                  }
               }
 
               override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
                   val maxWidth = MeasureSpec.getSize(widthMeasureSpec).coerceAtLeast(320) - 48
-                  val combined = if (secondaryText.isNotBlank()) "$primaryText\n$secondaryText" else primaryText
+                  val combined = if (secondaryText.isNotBlank()) "$primaryText\\n$secondaryText" else primaryText
                   if (combined.isBlank()) {
                       setMeasuredDimension(maxWidth + 48, 80)
                       return
@@ -510,10 +514,10 @@ jobs:
 
               override fun onDraw(canvas: Canvas) {
                   super.onDraw(canvas)
-                  val combined = if (secondaryText.isNotBlank()) "$primaryText\n$secondaryText" else primaryText
+                  val combined = if (secondaryText.isNotBlank()) "$primaryText\\n$secondaryText" else primaryText
                   if (combined.isBlank() && !isUnlockedForDrag) return
 
-                  val textToRender = if (combined.isBlank()) "✋ Drag Subtitle Position Here" else combined
+                  val textToRender = if (combined.isBlank()) "Drag Subtitle Position Here" else combined
                   val availWidth = (width - 48).coerceAtLeast(200)
 
                   val strokeLayout = StaticLayout.Builder
@@ -551,19 +555,17 @@ jobs:
                   canvas.restore()
               }
           }
-          EOF
+          """)
 
-      - name: Generate Dual-Window Floating Subtitle Service (FloatingSubtitleService.kt)
-        run: |
-          cat << 'EOF' > android_app/app/src/main/java/com/cinesub/overlay/FloatingSubtitleService.kt
+          write_file(f"{base}/app/src/main/java/com/cinesub/overlay/FloatingSubtitleService.kt", """
           package com.cinesub.overlay
 
-          import android.app.Notification
           import android.app.NotificationChannel
           import android.app.NotificationManager
           import android.app.PendingIntent
           import android.app.Service
           import android.content.Intent
+          import android.content.pm.ServiceInfo
           import android.content.res.Configuration
           import android.graphics.Color
           import android.graphics.PixelFormat
@@ -585,6 +587,7 @@ jobs:
           import android.widget.ScrollView
           import android.widget.SeekBar
           import android.widget.TextView
+          import androidx.core.app.NotificationCompat
           import kotlin.math.abs
 
           class FloatingSubtitleService : Service() {
@@ -750,7 +753,7 @@ jobs:
                   }
 
                   val titleTv = TextView(this).apply {
-                      text = "⠿ CineSub Deck"
+                      text = ":: CineSub Deck"
                       setTextColor(Color.WHITE)
                       textSize = 13f
                       setTypeface(typeface, Typeface.BOLD)
@@ -764,12 +767,12 @@ jobs:
                       setPadding(dpToPx(6), 0, dpToPx(8), 0)
                   }
 
-                  val minimizeBtn = createCompactButton("⎯") {
+                  val minimizeBtn = createCompactButton("_") {
                       expandedDeck.visibility = View.GONE
                       collapsedPill.visibility = View.VISIBLE
                   }
 
-                  val closeBtn = createCompactButton("✕") {
+                  val closeBtn = createCompactButton("X") {
                       stopSelf()
                   }
 
@@ -811,7 +814,7 @@ jobs:
                   }
 
                   val nudgeBackBtn = createCompactButton("-0.5s") { adjustSyncOffset(-500L) }
-                  playPauseBtn = createCompactButton("⏸") { togglePlayPause() }.apply {
+                  playPauseBtn = createCompactButton("||") { togglePlayPause() }.apply {
                       setTextColor(Color.parseColor("#F59E0B"))
                   }
                   val nudgeFwdBtn = createCompactButton("+0.5s") { adjustSyncOffset(500L) }
@@ -819,7 +822,7 @@ jobs:
                       isTranscriptOpen = !isTranscriptOpen
                       transcriptDrawer.visibility = if (isTranscriptOpen) View.VISIBLE else View.GONE
                   }
-                  lockDragBtn = createCompactButton("🔒 Pos") {
+                  lockDragBtn = createCompactButton("Pos") {
                       toggleSubtitleTouchPassThrough()
                   }
 
@@ -925,9 +928,9 @@ jobs:
                   if (isPlaying) {
                       anchorPlaybackMs = currentPlaybackMs
                       anchorRealtimeMs = SystemClock.elapsedRealtime()
-                      playPauseBtn.text = "⏸"
+                      playPauseBtn.text = "||"
                   } else {
-                      playPauseBtn.text = "▶"
+                      playPauseBtn.text = "Play"
                   }
               }
 
@@ -949,13 +952,13 @@ jobs:
                   if (isPositionUnlocked) {
                       subtitleParams.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                           WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-                      lockDragBtn.text = "✋ Drag"
+                      lockDragBtn.text = "Drag"
                       lockDragBtn.setTextColor(Color.parseColor("#F59E0B"))
                   } else {
                       subtitleParams.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                           WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                           WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-                      lockDragBtn.text = "🔒 Pos"
+                      lockDragBtn.text = "Pos"
                       lockDragBtn.setTextColor(Color.WHITE)
                   }
                   windowManager.updateViewLayout(subtitleView, subtitleParams)
@@ -1020,16 +1023,20 @@ jobs:
                       PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
                   )
 
-                  val notif = Notification.Builder(this, channelId)
+                  val notif = NotificationCompat.Builder(this, channelId)
                       .setContentTitle("CineSub Floating Subtitles Active")
                       .setContentText("Track: ${SubtitleRepository.fileName}")
                       .setSmallIcon(android.R.drawable.ic_media_play)
                       .setContentIntent(openPending)
-                      .addAction(Notification.Action.Builder(null, "Stop Overlay", stopPending).build())
+                      .addAction(0, "Stop Overlay", stopPending)
                       .setOngoing(true)
                       .build()
 
-                  startForeground(1001, notif)
+                  if (Build.VERSION.SDK_INT >= 34) {
+                      startForeground(1001, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+                  } else {
+                      startForeground(1001, notif)
+                  }
               }
 
               private fun formatClock(ms: Long): String {
@@ -1062,11 +1069,9 @@ jobs:
 
               override fun onBind(intent: Intent?): IBinder? = null
           }
-          EOF
+          """)
 
-      - name: Generate Infuse-Inspired Studio Dashboard Activity (MainActivity.kt)
-        run: |
-          cat << 'EOF' > android_app/app/src/main/java/com/cinesub/overlay/MainActivity.kt
+          write_file(f"{base}/app/src/main/java/com/cinesub/overlay/MainActivity.kt", """
           package com.cinesub.overlay
 
           import android.content.Intent
@@ -1193,7 +1198,7 @@ jobs:
                   }
                   fileCard.addView(activeFileTv)
 
-                  val pickFileBtn = createAccentButton("📂 Load Local Subtitle File", "#F59E0B", "#09090B") {
+                  val pickFileBtn = createAccentButton("Load Local Subtitle File", "#F59E0B", "#09090B") {
                       subtitleFileLauncher.launch(arrayOf("*/*"))
                   }
                   fileCard.addView(pickFileBtn)
@@ -1288,9 +1293,9 @@ jobs:
                   }
                   val colors = listOf(
                       "White" to Color.WHITE,
-                      "Cinema Yellow" to Color.parseColor("#FACC15"),
+                      "Yellow" to Color.parseColor("#FACC15"),
                       "Cyan" to Color.parseColor("#38BDF8"),
-                      "Soft Green" to Color.parseColor("#4ADE80")
+                      "Green" to Color.parseColor("#4ADE80")
                   )
                   colors.forEach { (name, col) ->
                       val cBtn = createAccentButton(name, "#1E293B", "#FFFFFF") {
@@ -1307,7 +1312,7 @@ jobs:
                   styleCard.addView(colorRow)
                   container.addView(styleCard)
 
-                  val launchBtn = createAccentButton("🚀 Launch Floating Subtitle Player", "#F59E0B", "#09090B") {
+                  val launchBtn = createAccentButton("Launch Floating Subtitle Player", "#F59E0B", "#09090B") {
                       if (!Settings.canDrawOverlays(this)) {
                           Toast.makeText(this, "Please grant 'Draw Over Other Apps' permission first!", Toast.LENGTH_LONG).show()
                           val intent = Intent(
@@ -1330,7 +1335,7 @@ jobs:
                   }
                   container.addView(launchBtn)
 
-                  val stopBtn = createAccentButton("⏹ Stop Floating Player", "#1E293B", "#F87171") {
+                  val stopBtn = createAccentButton("Stop Floating Player", "#1E293B", "#F87171") {
                       stopService(Intent(this, FloatingSubtitleService::class.java))
                       Toast.makeText(this, "Floating Subtitle Overlay Stopped", Toast.LENGTH_SHORT).show()
                   }.apply {
@@ -1349,9 +1354,9 @@ jobs:
                   super.onResume()
                   val hasOverlay = Settings.canDrawOverlays(this)
                   statusBadge.text = if (hasOverlay) {
-                      "✅ Overlay Permission Ready — You can launch over any video app"
+                      "Overlay Permission Ready — You can launch over any video app"
                   } else {
-                      "⚠️ Step 1 Required: Grant 'Draw over other apps' permission below"
+                      "Step 1 Required: Grant 'Draw over other apps' permission below"
                   }
                   statusBadge.setTextColor(
                       if (hasOverlay) Color.parseColor("#10B981") else Color.parseColor("#F59E0B")
@@ -1445,12 +1450,27 @@ jobs:
                   ).toInt()
               }
           }
-          EOF
+          """)
+          print("Project files generated successfully.")
+          PYEOF
 
-      - name: Compile Debug APK with Plain Console Logs
-        working-directory: android_app
+      - name: Configure Android SDK & Compile APK with Gradle 8.7
+        shell: bash
         run: |
-          gradle assembleDebug --console=plain
+          set -e
+          export ANDROID_HOME="/usr/local/lib/android/sdk"
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          echo "sdk.dir=$ANDROID_HOME" > android_app/local.properties
+
+          # Accept Android SDK licenses automatically
+          if [ -f "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          fi
+
+          # Download Gradle 8.7 directly and run assembleDebug
+          curl -sL https://services.gradle.org/distributions/gradle-8.7-bin.zip -o /tmp/gradle.zip
+          unzip -q -o /tmp/gradle.zip -d /tmp
+          /tmp/gradle-8.7/bin/gradle -p android_app assembleDebug --console=plain --stacktrace
 
       - name: Upload Compiled Android APK Artifact
         uses: actions/upload-artifact@v4
