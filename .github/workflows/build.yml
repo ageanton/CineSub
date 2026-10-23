@@ -1,4 +1,4 @@
-name: Build CineSub Pro APK
+name: Build CineSub Pro APK (v2.0)
 
 on:
   push:
@@ -22,7 +22,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Generate Entire Android Project & Download Subtitle Fonts
+      - name: Generate Android Project & Download Clean Subtitle Fonts
         shell: bash
         run: |
           set -e
@@ -40,11 +40,11 @@ jobs:
           for d in dirs:
               os.makedirs(d, exist_ok=True)
 
-          # Download dedicated cinema subtitle fonts (with safe fallback if offline)
+          # Download clean, industry-standard sans-serif subtitle fonts
           fonts = {
-              "atkinson_hyperlegible_bold.ttf": "https://raw.githubusercontent.com/google/fonts/main/ofl/atkinsonhyperlegible/AtkinsonHyperlegible-Bold.ttf",
-              "cinesans_bold.ttf": "https://raw.githubusercontent.com/google/fonts/main/ofl/plusjakartasans/PlusJakartaSans%5Bwght%5D.ttf",
-              "dm_mono_medium.ttf": "https://raw.githubusercontent.com/google/fonts/main/ofl/dmmono/DMMono-Medium.ttf",
+              "cinesans.ttf": "https://raw.githubusercontent.com/google/fonts/main/ofl/plusjakartasans/PlusJakartaSans%5Bwght%5D.ttf",
+              "inter_semibold.ttf": "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter%5Bopsz%2Cwght%5D.ttf",
+              "opensans_bold.ttf": "https://raw.githubusercontent.com/google/fonts/main/ofl/opensans/OpenSans%5Bwdth%2Cwght%5D.ttf",
           }
           for fname, url in fonts.items():
               dest = f"{base}/app/src/main/assets/fonts/{fname}"
@@ -107,8 +107,8 @@ jobs:
                   applicationId "com.cinesub.overlay"
                   minSdk 26
                   targetSdk 34
-                  versionCode 3
-                  versionName "1.2.0-Pro"
+                  versionCode 4
+                  versionName "2.0.0-Pro"
               }
 
               buildTypes {
@@ -210,20 +210,22 @@ jobs:
           object SubtitleRepository {
               var activeCues: List<SubtitleCue> = getDemoCues()
               var fileName: String = "Built-in Cinema Demo (.ASS)"
-              var fontKey: String = "atkinson"
-              var textSizeSp: Float = 22f
-              var strokeWidthPx: Float = 9f
+              var fontKey: String = "cinesans"
+              var textSizeSp: Float = 20.0f
+              var strokeWidthPx: Float = 8.0f
               var textColorHex: Int = 0xFFFFFFFF.toInt()
-              var boxBgAlpha: Int = 135
-              var fpsMultiplier: Double = 1.0
+              var boxBgAlpha: Int = 120
+              var pillIdleAlpha: Float = 0.25f
+              var fpsMultiplier: Double = 1.000
 
               fun getDemoCues(): List<SubtitleCue> = listOf(
-                  SubtitleCue(0, 4500, "CineSub Pro Floating Player is Active!", "[Window A is 100% click-through — tap your video underneath freely]"),
-                  SubtitleCue(4500, 9500, "Switch to Chrome, YouTube, or any video app now.", "[Use the Floating Deck to Play, Pause, Scrub, or Nudge Sync]"),
-                  SubtitleCue(9500, 15000, "Hear a line in the video? Tap 'Lines' on the floating deck!", "[Tapping any spoken line snaps the monotonic clock to that exact moment]"),
-                  SubtitleCue(15000, 22000, "Rendered with Atkinson Hyperlegible & Vector Edge Strokes.", "[Zero glare even over bright white explosions or daytime scenes]"),
-                  SubtitleCue(22000, 30000, "Tap 'Pos' on the floating bar to unlock and drag this box.", "[Collapse the floating player into a tiny 'CC' edge pill anytime]"),
-                  SubtitleCue(30000, 45000, "Supports .SRT, .VTT, .ASS, .SSA, .SUB, .SBV & .LRC locally!", "[Load any downloaded subtitle file from your phone in the CineSub studio]")
+                  SubtitleCue(0, 4500, "CineSub Pro v2.0 Floating Player is Ready!", "[Stealth CC pill & Two-Row Ergonomic Controls Active]"),
+                  SubtitleCue(4500, 9500, "Tap the '_' button to test the new Stealth Translucent CC Pill.", "[Fades to 25% opacity after 3 seconds so it never distracts you]"),
+                  SubtitleCue(9500, 15000, "Tap 'Lines' to see the new Full-Movie Auto-Scrolling List.", "[Highlights the current line and scrolls along with playback]"),
+                  SubtitleCue(15000, 21000, "Notice the wide, easy-to-hit Play/Pause button in the center.", "[Flanked by -0.5s/+0.5s and fine -0.1s/+0.1s sync nudges]"),
+                  SubtitleCue(21000, 28000, "Need framerate drift correction (23.976fps vs 25fps PAL)?", "[Adjust Speed & FPS presets in the app without losing your current time]"),
+                  SubtitleCue(28000, 36000, "Subtitle font size now adjusts in ultra-fine 0.1sp steps.", "[Use the slider or -0.2sp / +0.2sp precision buttons in the studio]"),
+                  SubtitleCue(36000, 45000, "Supports .SRT, .VTT, .ASS, .SSA, .SUB, .SBV & .LRC locally!", "[Load any subtitle file from your phone and enjoy your video]")
               )
           }
 
@@ -379,21 +381,40 @@ jobs:
                   return cues.sortedBy { it.startMs }
               }
 
-              fun findActiveCueBinarySearch(cues: List<SubtitleCue>, currentMs: Long): SubtitleCue? {
+              // Returns the active cue index, or the nearest upcoming/previous index for auto-scrolling
+              fun findActiveCueIndex(cues: List<SubtitleCue>, currentMs: Long): Int {
                   var low = 0
                   var high = cues.size - 1
                   while (low <= high) {
                       val mid = (low + high) ushr 1
                       val cue = cues[mid]
                       if (currentMs in cue.startMs..cue.endMs) {
-                          return cue
+                          return mid
                       } else if (currentMs < cue.startMs) {
                           high = mid - 1
                       } else {
                           low = mid + 1
                       }
                   }
-                  return null
+                  return -1
+              }
+
+              fun findNearestCueIndexForScroll(cues: List<SubtitleCue>, currentMs: Long): Int {
+                  if (cues.isEmpty()) return 0
+                  var low = 0
+                  var high = cues.size - 1
+                  while (low <= high) {
+                      val mid = (low + high) ushr 1
+                      val cue = cues[mid]
+                      if (currentMs in cue.startMs..cue.endMs) {
+                          return mid
+                      } else if (currentMs < cue.startMs) {
+                          high = mid - 1
+                      } else {
+                          low = mid + 1
+                      }
+                  }
+                  return (low - 1).coerceIn(0, cues.size - 1)
               }
           }
           """)
@@ -425,12 +446,12 @@ jobs:
                   strokeJoin = Paint.Join.ROUND
                   strokeCap = Paint.Cap.ROUND
                   color = Color.BLACK
-                  strokeWidth = 9f
+                  strokeWidth = 8f
               }
 
               private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                   style = Paint.Style.FILL
-                  color = Color.argb(135, 8, 8, 12)
+                  color = Color.argb(120, 8, 8, 12)
               }
 
               private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -458,7 +479,7 @@ jobs:
               }
 
               fun applyStyleFromRepo(context: Context) {
-                  val tf = loadCinemaTypeface(context, SubtitleRepository.fontKey)
+                  val tf = loadCleanSansTypeface(context, SubtitleRepository.fontKey)
                   fillPaint.typeface = tf
                   strokePaint.typeface = tf
 
@@ -476,23 +497,37 @@ jobs:
                   invalidate()
               }
 
-              private fun loadCinemaTypeface(context: Context, key: String): Typeface {
-                  val assetPath = when (key) {
-                      "atkinson" -> "fonts/atkinson_hyperlegible_bold.ttf"
-                      "cinesans" -> "fonts/cinesans_bold.ttf"
-                      "mono" -> "fonts/dm_mono_medium.ttf"
-                      else -> null
+              private fun loadCleanSansTypeface(context: Context, key: String): Typeface {
+                  when (key) {
+                      "cinesans" -> {
+                          try {
+                              return Typeface.create(
+                                  Typeface.createFromAsset(context.assets, "fonts/cinesans.ttf"),
+                                  Typeface.BOLD
+                              )
+                          } catch (_: Exception) {}
+                      }
+                      "inter" -> {
+                          try {
+                              return Typeface.create(
+                                  Typeface.createFromAsset(context.assets, "fonts/inter_semibold.ttf"),
+                                  Typeface.BOLD
+                              )
+                          } catch (_: Exception) {}
+                      }
+                      "opensans" -> {
+                          try {
+                              return Typeface.create(
+                                  Typeface.createFromAsset(context.assets, "fonts/opensans_bold.ttf"),
+                                  Typeface.BOLD
+                              )
+                          } catch (_: Exception) {}
+                      }
+                      "roboto" -> {
+                          return Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                      }
                   }
-                  if (assetPath != null) {
-                      try {
-                          return Typeface.createFromAsset(context.assets, assetPath)
-                      } catch (_: Exception) {}
-                  }
-                  return if (key == "serif") {
-                      Typeface.create(Typeface.SERIF, Typeface.BOLD)
-                  } else {
-                      Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-                  }
+                  return Typeface.create("sans-serif", Typeface.BOLD)
               }
 
               override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -517,7 +552,7 @@ jobs:
                   val combined = if (secondaryText.isNotBlank()) "$primaryText\\n$secondaryText" else primaryText
                   if (combined.isBlank() && !isUnlockedForDrag) return
 
-                  val textToRender = if (combined.isBlank()) "Drag Subtitle Position Here" else combined
+                  val textToRender = if (combined.isBlank()) "Drag Subtitle Vertically Here" else combined
                   val availWidth = (width - 48).coerceAtLeast(200)
 
                   val strokeLayout = StaticLayout.Builder
@@ -541,14 +576,14 @@ jobs:
                   val left = (width - boxW) / 2f
                   bgRect.set(left, 6f, left + boxW, height - 6f)
 
-                  canvas.drawRoundRect(bgRect, 28f, 28f, bgPaint)
+                  canvas.drawRoundRect(bgRect, 24f, 24f, bgPaint)
                   if (isUnlockedForDrag) {
-                      canvas.drawRoundRect(bgRect, 28f, 28f, borderPaint)
+                      canvas.drawRoundRect(bgRect, 24f, 24f, borderPaint)
                   }
 
                   canvas.save()
                   canvas.translate(24f, 20f)
-                  if (SubtitleRepository.strokeWidthPx > 0.5f) {
+                  if (SubtitleRepository.strokeWidthPx > 0.4f) {
                       strokeLayout.draw(canvas)
                   }
                   fillLayout.draw(canvas)
@@ -580,11 +615,13 @@ jobs:
           import android.view.Gravity
           import android.view.MotionEvent
           import android.view.View
+          import android.view.ViewGroup
           import android.view.WindowManager
+          import android.widget.BaseAdapter
           import android.widget.Button
           import android.widget.FrameLayout
           import android.widget.LinearLayout
-          import android.widget.ScrollView
+          import android.widget.ListView
           import android.widget.SeekBar
           import android.widget.TextView
           import androidx.core.app.NotificationCompat
@@ -594,6 +631,7 @@ jobs:
 
               companion object {
                   const val ACTION_REFRESH_STYLE = "com.cinesub.overlay.REFRESH_STYLE"
+                  const val ACTION_UPDATE_SPEED = "com.cinesub.overlay.UPDATE_SPEED"
                   const val ACTION_STOP_OVERLAY = "com.cinesub.overlay.STOP_OVERLAY"
                   var isRunning = false
               }
@@ -607,12 +645,14 @@ jobs:
               private lateinit var expandedDeck: LinearLayout
               private lateinit var collapsedPill: TextView
               private lateinit var timeLabel: TextView
+              private lateinit var speedBadgeLabel: TextView
               private lateinit var offsetLabel: TextView
               private lateinit var playPauseBtn: Button
               private lateinit var lockDragBtn: Button
+              private lateinit var linesToggleBtn: Button
               private lateinit var scrubber: SeekBar
-              private lateinit var transcriptDrawer: ScrollView
-              private lateinit var transcriptContainer: LinearLayout
+              private lateinit var transcriptListView: ListView
+              private lateinit var transcriptAdapter: SubtitleLinesAdapter
 
               private val tickerHandler = Handler(Looper.getMainLooper())
               private var isPlaying = true
@@ -620,26 +660,52 @@ jobs:
               private var anchorPlaybackMs = 0L
               private var currentPlaybackMs = 0L
               private var syncOffsetMs = 0L
+              private var activeSpeedMultiplier = 1.0
               private var isPositionUnlocked = false
               private var isTranscriptOpen = false
+              private var lastActiveCueIdx = -1
+              private var lastAutoScrollIdx = -1
+              private var userScrollingUntilMs = 0L
+
+              private val pillDimRunnable = Runnable {
+                  if (::collapsedPill.isInitialized && collapsedPill.visibility == View.VISIBLE) {
+                      collapsedPill.animate().alpha(SubtitleRepository.pillIdleAlpha).setDuration(350).start()
+                  }
+              }
 
               private val frameTicker = object : Runnable {
                   override fun run() {
                       if (isPlaying) {
                           val elapsed = SystemClock.elapsedRealtime() - anchorRealtimeMs
-                          currentPlaybackMs = anchorPlaybackMs + (elapsed * SubtitleRepository.fpsMultiplier).toLong()
+                          currentPlaybackMs = anchorPlaybackMs + (elapsed * activeSpeedMultiplier).toLong()
                       }
                       val effectiveMs = (currentPlaybackMs + syncOffsetMs).coerceAtLeast(0L)
-                      val activeCue = SubtitleParser.findActiveCueBinarySearch(SubtitleRepository.activeCues, effectiveMs)
+                      val cues = SubtitleRepository.activeCues
+                      val activeIdx = SubtitleParser.findActiveCueIndex(cues, effectiveMs)
 
-                      if (activeCue != null) {
-                          subtitleView.updateSubtitle(activeCue.primaryText, activeCue.secondaryText)
+                      if (activeIdx != -1) {
+                          val cue = cues[activeIdx]
+                          subtitleView.updateSubtitle(cue.primaryText, cue.secondaryText)
                       } else {
                           subtitleView.updateSubtitle("", "")
                       }
 
+                      // Update live highlight and auto-scroll in virtualized ListView when open
+                      val nearestIdx = SubtitleParser.findNearestCueIndexForScroll(cues, effectiveMs)
+                      if (activeIdx != lastActiveCueIdx) {
+                          lastActiveCueIdx = activeIdx
+                          if (isTranscriptOpen) {
+                              transcriptAdapter.notifyDataSetChanged()
+                          }
+                      }
+                      if (isTranscriptOpen && nearestIdx != lastAutoScrollIdx && SystemClock.elapsedRealtime() > userScrollingUntilMs) {
+                          lastAutoScrollIdx = nearestIdx
+                          val offsetPx = dpToPx(44)
+                          transcriptListView.setSelectionFromTop(nearestIdx, offsetPx)
+                      }
+
                       timeLabel.text = formatClock(effectiveMs)
-                      val maxDuration = SubtitleRepository.activeCues.lastOrNull()?.endMs?.coerceAtLeast(1000L) ?: 60000L
+                      val maxDuration = cues.lastOrNull()?.endMs?.coerceAtLeast(1000L) ?: 60000L
                       scrubber.max = maxDuration.toInt()
                       scrubber.progress = effectiveMs.coerceAtMost(maxDuration).toInt()
 
@@ -650,6 +716,7 @@ jobs:
               override fun onCreate() {
                   super.onCreate()
                   isRunning = true
+                  activeSpeedMultiplier = SubtitleRepository.fpsMultiplier
                   windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
                   startForegroundWithNotification()
                   setupWindowASubtitleOverlay()
@@ -668,10 +735,31 @@ jobs:
                       }
                       ACTION_REFRESH_STYLE -> {
                           subtitleView.applyStyleFromRepo(this)
-                          rebuildTranscriptRows()
+                          transcriptAdapter.notifyDataSetChanged()
+                          if (collapsedPill.visibility == View.VISIBLE) {
+                              collapsedPill.alpha = SubtitleRepository.pillIdleAlpha
+                          }
+                      }
+                      ACTION_UPDATE_SPEED -> {
+                          applyNewSpeedPreservingAnchor(SubtitleRepository.fpsMultiplier)
                       }
                   }
                   return START_STICKY
+              }
+
+              // Re-anchors the clock at the exact current timestamp before applying the new speed multiplier
+              private fun applyNewSpeedPreservingAnchor(newSpeed: Double) {
+                  val now = SystemClock.elapsedRealtime()
+                  if (isPlaying) {
+                      val elapsed = now - anchorRealtimeMs
+                      currentPlaybackMs = anchorPlaybackMs + (elapsed * activeSpeedMultiplier).toLong()
+                  }
+                  anchorPlaybackMs = currentPlaybackMs
+                  anchorRealtimeMs = now
+                  activeSpeedMultiplier = newSpeed
+                  if (::speedBadgeLabel.isInitialized) {
+                      speedBadgeLabel.text = "${"%.3f".format(activeSpeedMultiplier)}x"
+                  }
               }
 
               private fun setupWindowASubtitleOverlay() {
@@ -708,7 +796,7 @@ jobs:
                               }
                               MotionEvent.ACTION_MOVE -> {
                                   val deltaY = (startRawY - event.rawY).toInt()
-                                  subtitleParams.y = (startParamY + deltaY).coerceIn(dpToPx(24), resources.displayMetrics.heightPixels - dpToPx(140))
+                                  subtitleParams.y = (startParamY + deltaY).coerceIn(dpToPx(20), resources.displayMetrics.heightPixels - dpToPx(130))
                                   windowManager.updateViewLayout(subtitleView, subtitleParams)
                                   return true
                               }
@@ -723,74 +811,91 @@ jobs:
               private fun setupWindowBControllerOverlay() {
                   controllerRoot = FrameLayout(this)
 
+                  // 1. Stealth Translucent Minimized "CC" Pill (Smoked dark glass, zero loud colors)
                   collapsedPill = TextView(this).apply {
                       text = "CC"
-                      setTextColor(Color.parseColor("#09090B"))
+                      setTextColor(Color.argb(145, 255, 255, 255))
                       setTypeface(typeface, Typeface.BOLD)
-                      textSize = 14f
+                      textSize = 11.5f
                       gravity = Gravity.CENTER
                       background = GradientDrawable().apply {
                           shape = GradientDrawable.OVAL
-                          setColor(Color.parseColor("#F59E0B"))
-                          setStroke(dpToPx(2), Color.WHITE)
+                          setColor(Color.argb(48, 10, 10, 14))
+                          setStroke(dpToPx(1), Color.argb(65, 255, 255, 255))
                       }
                       visibility = View.GONE
                   }
 
+                  // 2. Expanded Two-Row Floating Subtitle Player Deck
                   expandedDeck = LinearLayout(this).apply {
                       orientation = LinearLayout.VERTICAL
                       setPadding(dpToPx(14), dpToPx(12), dpToPx(14), dpToPx(12))
                       background = GradientDrawable().apply {
                           cornerRadius = dpToPx(20).toFloat()
-                          setColor(Color.argb(232, 14, 15, 22))
+                          setColor(Color.argb(235, 14, 15, 22))
                           setStroke(dpToPx(1), Color.argb(55, 255, 255, 255))
                       }
+                      layoutParams = FrameLayout.LayoutParams(dpToPx(315), FrameLayout.LayoutParams.WRAP_CONTENT)
                   }
 
+                  // Header Row (Drag Handle + Speed/Offset Readouts + Minimize + Close)
                   val headerRow = LinearLayout(this).apply {
                       orientation = LinearLayout.HORIZONTAL
                       gravity = Gravity.CENTER_VERTICAL
                   }
 
                   val titleTv = TextView(this).apply {
-                      text = ":: CineSub Deck"
+                      text = ":: CineSub"
                       setTextColor(Color.WHITE)
                       textSize = 13f
                       setTypeface(typeface, Typeface.BOLD)
                       layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
                   }
 
+                  speedBadgeLabel = TextView(this).apply {
+                      text = "${"%.3f".format(activeSpeedMultiplier)}x"
+                      setTextColor(Color.parseColor("#94A3B8"))
+                      textSize = 10.5f
+                      typeface = Typeface.MONOSPACE
+                      setPadding(dpToPx(4), 0, dpToPx(6), 0)
+                  }
+
                   offsetLabel = TextView(this).apply {
                       text = "+0.0s"
                       setTextColor(Color.parseColor("#F59E0B"))
                       textSize = 11f
-                      setPadding(dpToPx(6), 0, dpToPx(8), 0)
+                      typeface = Typeface.MONOSPACE
+                      setPadding(dpToPx(4), 0, dpToPx(8), 0)
                   }
 
-                  val minimizeBtn = createCompactButton("_") {
+                  val minimizeBtn = createDeckButton("_", bgColor = Color.argb(40, 255, 255, 255)) {
                       expandedDeck.visibility = View.GONE
+                      collapsedPill.alpha = 0.85f
                       collapsedPill.visibility = View.VISIBLE
+                      schedulePillAutoDim()
                   }
 
-                  val closeBtn = createCompactButton("X") {
+                  val closeBtn = createDeckButton("X", bgColor = Color.argb(45, 239, 68, 68)) {
                       stopSelf()
                   }
 
                   headerRow.addView(titleTv)
+                  headerRow.addView(speedBadgeLabel)
                   headerRow.addView(offsetLabel)
                   headerRow.addView(minimizeBtn)
                   headerRow.addView(closeBtn)
 
+                  // Timeline Scrubber Row
                   val scrubRow = LinearLayout(this).apply {
                       orientation = LinearLayout.HORIZONTAL
                       gravity = Gravity.CENTER_VERTICAL
-                      setPadding(0, dpToPx(8), 0, dpToPx(6))
+                      setPadding(0, dpToPx(8), 0, dpToPx(8))
                   }
 
                   timeLabel = TextView(this).apply {
                       text = "00:00.0"
                       setTextColor(Color.parseColor("#F59E0B"))
-                      textSize = 11f
+                      textSize = 11.5f
                       typeface = Typeface.MONOSPACE
                   }
 
@@ -808,50 +913,115 @@ jobs:
                   scrubRow.addView(timeLabel)
                   scrubRow.addView(scrubber)
 
-                  val transportRow = LinearLayout(this).apply {
+                  // ROW 1: Main Transport Controls (Wide, prominent Play/Pause button in center)
+                  val primaryTransportRow = LinearLayout(this).apply {
                       orientation = LinearLayout.HORIZONTAL
-                      gravity = Gravity.CENTER
+                      gravity = Gravity.CENTER_VERTICAL
+                      layoutParams = LinearLayout.LayoutParams(
+                          LinearLayout.LayoutParams.MATCH_PARENT,
+                          LinearLayout.LayoutParams.WRAP_CONTENT
+                      ).apply { bottomMargin = dpToPx(6) }
                   }
 
-                  val nudgeBackBtn = createCompactButton("-0.5s") { adjustSyncOffset(-500L) }
-                  playPauseBtn = createCompactButton("||") { togglePlayPause() }.apply {
-                      setTextColor(Color.parseColor("#F59E0B"))
+                  val nudgeBack500Btn = createWeightedButton("-0.5s", weight = 1f, heightDp = 44) {
+                      adjustSyncOffset(-500L)
                   }
-                  val nudgeFwdBtn = createCompactButton("+0.5s") { adjustSyncOffset(500L) }
-                  val linesBtn = createCompactButton("Lines") {
+
+                  playPauseBtn = createWeightedButton(
+                      label = "PAUSE",
+                      weight = 1.9f,
+                      heightDp = 46,
+                      bgHex = "#F59E0B",
+                      fgHex = "#09090B"
+                  ) {
+                      togglePlayPause()
+                  }.apply {
+                      textSize = 13.5f
+                  }
+
+                  val nudgeFwd500Btn = createWeightedButton("+0.5s", weight = 1f, heightDp = 44) {
+                      adjustSyncOffset(500L)
+                  }
+
+                  primaryTransportRow.addView(nudgeBack500Btn)
+                  primaryTransportRow.addView(playPauseBtn)
+                  primaryTransportRow.addView(nudgeFwd500Btn)
+
+                  // ROW 2: Secondary Fine-Sync & Utility Controls (-0.1s | +0.1s | Lines | Move)
+                  val secondaryUtilityRow = LinearLayout(this).apply {
+                      orientation = LinearLayout.HORIZONTAL
+                      gravity = Gravity.CENTER_VERTICAL
+                      layoutParams = LinearLayout.LayoutParams(
+                          LinearLayout.LayoutParams.MATCH_PARENT,
+                          LinearLayout.LayoutParams.WRAP_CONTENT
+                      )
+                  }
+
+                  val nudgeBack100Btn = createWeightedButton("-0.1s", weight = 1f, heightDp = 36) {
+                      adjustSyncOffset(-100L)
+                  }
+                  val nudgeFwd100Btn = createWeightedButton("+0.1s", weight = 1f, heightDp = 36) {
+                      adjustSyncOffset(100L)
+                  }
+                  linesToggleBtn = createWeightedButton("Lines", weight = 1.2f, heightDp = 36) {
                       isTranscriptOpen = !isTranscriptOpen
-                      transcriptDrawer.visibility = if (isTranscriptOpen) View.VISIBLE else View.GONE
+                      transcriptListView.visibility = if (isTranscriptOpen) View.VISIBLE else View.GONE
+                      linesToggleBtn.setTextColor(
+                          if (isTranscriptOpen) Color.parseColor("#F59E0B") else Color.WHITE
+                      )
+                      if (isTranscriptOpen) {
+                          transcriptAdapter.notifyDataSetChanged()
+                          val idx = SubtitleParser.findNearestCueIndexForScroll(
+                              SubtitleRepository.activeCues,
+                              (currentPlaybackMs + syncOffsetMs).coerceAtLeast(0L)
+                          )
+                          transcriptListView.post {
+                              transcriptListView.setSelectionFromTop(idx, dpToPx(44))
+                          }
+                      }
                   }
-                  lockDragBtn = createCompactButton("Pos") {
+                  lockDragBtn = createWeightedButton("Move Sub", weight = 1.3f, heightDp = 36) {
                       toggleSubtitleTouchPassThrough()
                   }
 
-                  transportRow.addView(nudgeBackBtn)
-                  transportRow.addView(playPauseBtn)
-                  transportRow.addView(nudgeFwdBtn)
-                  transportRow.addView(linesBtn)
-                  transportRow.addView(lockDragBtn)
+                  secondaryUtilityRow.addView(nudgeBack100Btn)
+                  secondaryUtilityRow.addView(nudgeFwd100Btn)
+                  secondaryUtilityRow.addView(linesToggleBtn)
+                  secondaryUtilityRow.addView(lockDragBtn)
 
-                  transcriptDrawer = ScrollView(this).apply {
+                  // Full-Movie Virtualized ListView Transcript Drawer
+                  transcriptAdapter = SubtitleLinesAdapter()
+                  transcriptListView = ListView(this).apply {
+                      adapter = transcriptAdapter
+                      divider = null
+                      dividerHeight = dpToPx(2)
                       visibility = View.GONE
+                      background = GradientDrawable().apply {
+                          cornerRadius = dpToPx(12).toFloat()
+                          setColor(Color.argb(160, 6, 7, 11))
+                      }
+                      setPadding(dpToPx(6), dpToPx(6), dpToPx(6), dpToPx(6))
                       layoutParams = LinearLayout.LayoutParams(
                           LinearLayout.LayoutParams.MATCH_PARENT,
-                          dpToPx(150)
+                          dpToPx(170)
                       ).apply { topMargin = dpToPx(8) }
+
+                      setOnTouchListener { _, event ->
+                          if (event.actionMasked == MotionEvent.ACTION_MOVE || event.actionMasked == MotionEvent.ACTION_DOWN) {
+                              userScrollingUntilMs = SystemClock.elapsedRealtime() + 4500L
+                          }
+                          false
+                      }
                   }
-                  transcriptContainer = LinearLayout(this).apply {
-                      orientation = LinearLayout.VERTICAL
-                  }
-                  transcriptDrawer.addView(transcriptContainer)
-                  rebuildTranscriptRows()
 
                   expandedDeck.addView(headerRow)
                   expandedDeck.addView(scrubRow)
-                  expandedDeck.addView(transportRow)
-                  expandedDeck.addView(transcriptDrawer)
+                  expandedDeck.addView(primaryTransportRow)
+                  expandedDeck.addView(secondaryUtilityRow)
+                  expandedDeck.addView(transcriptListView)
 
                   controllerRoot.addView(expandedDeck)
-                  controllerRoot.addView(collapsedPill, FrameLayout.LayoutParams(dpToPx(48), dpToPx(48)))
+                  controllerRoot.addView(collapsedPill, FrameLayout.LayoutParams(dpToPx(40), dpToPx(40)))
 
                   controllerParams = WindowManager.LayoutParams(
                       WindowManager.LayoutParams.WRAP_CONTENT,
@@ -862,8 +1032,8 @@ jobs:
                       PixelFormat.TRANSLUCENT
                   ).apply {
                       gravity = Gravity.TOP or Gravity.END
-                      x = dpToPx(16)
-                      y = dpToPx(90)
+                      x = dpToPx(14)
+                      y = dpToPx(80)
                   }
 
                   val dragListener = object : View.OnTouchListener {
@@ -874,6 +1044,10 @@ jobs:
                       override fun onTouch(v: View, event: MotionEvent): Boolean {
                           when (event.actionMasked) {
                               MotionEvent.ACTION_DOWN -> {
+                                  if (v == collapsedPill) {
+                                      tickerHandler.removeCallbacks(pillDimRunnable)
+                                      collapsedPill.animate().alpha(0.90f).setDuration(120).start()
+                                  }
                                   initialX = controllerParams.x
                                   initialY = controllerParams.y
                                   touchX = event.rawX
@@ -892,6 +1066,8 @@ jobs:
                                           collapsedPill.visibility = View.GONE
                                           expandedDeck.visibility = View.VISIBLE
                                       }
+                                  } else if (v == collapsedPill) {
+                                      schedulePillAutoDim()
                                   }
                                   return true
                               }
@@ -906,31 +1082,57 @@ jobs:
                   windowManager.addView(controllerRoot, controllerParams)
               }
 
-              private fun rebuildTranscriptRows() {
-                  if (!::transcriptContainer.isInitialized) return
-                  transcriptContainer.removeAllViews()
-                  SubtitleRepository.activeCues.take(120).forEach { cue ->
-                      val row = TextView(this).apply {
-                          text = "${formatClock(cue.startMs)}  ${cue.primaryText}"
-                          setTextColor(Color.parseColor("#E2E8F0"))
+              private fun schedulePillAutoDim() {
+                  tickerHandler.removeCallbacks(pillDimRunnable)
+                  tickerHandler.postDelayed(pillDimRunnable, 3000L)
+              }
+
+              private inner class SubtitleLinesAdapter : BaseAdapter() {
+                  override fun getCount(): Int = SubtitleRepository.activeCues.size
+                  override fun getItem(position: Int): SubtitleCue = SubtitleRepository.activeCues[position]
+                  override fun getItemId(position: Int): Long = position.toLong()
+
+                  override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
+                      val tv = (convertView as? TextView) ?: TextView(this@FloatingSubtitleService).apply {
                           textSize = 11.5f
-                          setPadding(dpToPx(8), dpToPx(6), dpToPx(8), dpToPx(6))
-                          setOnClickListener {
-                              seekToTimestamp(cue.startMs)
-                          }
+                          setPadding(dpToPx(10), dpToPx(7), dpToPx(10), dpToPx(7))
                       }
-                      transcriptContainer.addView(row)
+                      val cue = getItem(position)
+                      val isCurrent = (position == lastActiveCueIdx)
+                      tv.text = "${formatClock(cue.startMs)}   ${cue.primaryText}"
+                      if (isCurrent) {
+                          tv.setTextColor(Color.parseColor("#09090B"))
+                          tv.setTypeface(null, Typeface.BOLD)
+                          tv.background = GradientDrawable().apply {
+                              cornerRadius = dpToPx(8).toFloat()
+                              setColor(Color.parseColor("#F59E0B"))
+                          }
+                      } else {
+                          tv.setTextColor(Color.parseColor("#E2E8F0"))
+                          tv.setTypeface(null, Typeface.NORMAL)
+                          tv.background = null
+                      }
+                      tv.setOnClickListener {
+                          userScrollingUntilMs = 0L
+                          seekToTimestamp(cue.startMs)
+                          transcriptAdapter.notifyDataSetChanged()
+                      }
+                      return tv
                   }
               }
 
               private fun togglePlayPause() {
-                  isPlaying = !isPlaying
+                  val now = SystemClock.elapsedRealtime()
                   if (isPlaying) {
-                      anchorPlaybackMs = currentPlaybackMs
-                      anchorRealtimeMs = SystemClock.elapsedRealtime()
-                      playPauseBtn.text = "||"
+                      val elapsed = now - anchorRealtimeMs
+                      currentPlaybackMs = anchorPlaybackMs + (elapsed * activeSpeedMultiplier).toLong()
+                      isPlaying = false
+                      playPauseBtn.text = "PLAY"
                   } else {
-                      playPauseBtn.text = "Play"
+                      anchorPlaybackMs = currentPlaybackMs
+                      anchorRealtimeMs = now
+                      isPlaying = true
+                      playPauseBtn.text = "PAUSE"
                   }
               }
 
@@ -952,19 +1154,19 @@ jobs:
                   if (isPositionUnlocked) {
                       subtitleParams.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                           WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-                      lockDragBtn.text = "Drag"
+                      lockDragBtn.text = "Lock Pos"
                       lockDragBtn.setTextColor(Color.parseColor("#F59E0B"))
                   } else {
                       subtitleParams.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                           WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                           WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-                      lockDragBtn.text = "Pos"
+                      lockDragBtn.text = "Move Sub"
                       lockDragBtn.setTextColor(Color.WHITE)
                   }
                   windowManager.updateViewLayout(subtitleView, subtitleParams)
               }
 
-              private fun createCompactButton(label: String, onClick: () -> Unit): Button {
+              private fun createDeckButton(label: String, bgColor: Int, onClick: () -> Unit): Button {
                   return Button(this).apply {
                       text = label
                       isAllCaps = false
@@ -974,16 +1176,51 @@ jobs:
                       minimumWidth = 0
                       minHeight = 0
                       minimumHeight = 0
-                      setPadding(dpToPx(9), dpToPx(6), dpToPx(9), dpToPx(6))
+                      setPadding(dpToPx(10), dpToPx(5), dpToPx(10), dpToPx(5))
                       background = GradientDrawable().apply {
-                          cornerRadius = dpToPx(10).toFloat()
-                          setColor(Color.argb(38, 255, 255, 255))
+                          cornerRadius = dpToPx(8).toFloat()
+                          setColor(bgColor)
                       }
                       layoutParams = LinearLayout.LayoutParams(
                           LinearLayout.LayoutParams.WRAP_CONTENT,
                           LinearLayout.LayoutParams.WRAP_CONTENT
                       ).apply {
-                          marginEnd = dpToPx(4)
+                          marginStart = dpToPx(4)
+                      }
+                      setOnClickListener { onClick() }
+                  }
+              }
+
+              private fun createWeightedButton(
+                  label: String,
+                  weight: Float,
+                  heightDp: Int,
+                  bgHex: String = "#26FFFFFF",
+                  fgHex: String = "#FFFFFF",
+                  onClick: () -> Unit
+              ): Button {
+                  return Button(this).apply {
+                      text = label
+                      isAllCaps = false
+                      textSize = 11.5f
+                      setTypeface(typeface, Typeface.BOLD)
+                      setTextColor(Color.parseColor(fgHex))
+                      minWidth = 0
+                      minimumWidth = 0
+                      minHeight = 0
+                      minimumHeight = 0
+                      setPadding(dpToPx(4), 0, dpToPx(4), 0)
+                      background = GradientDrawable().apply {
+                          cornerRadius = dpToPx(12).toFloat()
+                          setColor(Color.parseColor(bgHex))
+                      }
+                      layoutParams = LinearLayout.LayoutParams(
+                          0,
+                          dpToPx(heightDp),
+                          weight
+                      ).apply {
+                          marginStart = dpToPx(3)
+                          marginEnd = dpToPx(3)
                       }
                       setOnClickListener { onClick() }
                   }
@@ -1094,12 +1331,17 @@ jobs:
           import android.widget.Toast
           import androidx.activity.result.contract.ActivityResultContracts
           import androidx.appcompat.app.AppCompatActivity
+          import kotlin.math.roundToInt
 
           class MainActivity : AppCompatActivity() {
 
               private lateinit var statusBadge: TextView
               private lateinit var activeFileTv: TextView
               private lateinit var previewSubView: StrokedSubtitleView
+              private lateinit var sizeLabel: TextView
+              private lateinit var sizeSeek: SeekBar
+              private lateinit var speedStatusTv: TextView
+              private lateinit var speedSeek: SeekBar
 
               private val subtitleFileLauncher = registerForActivityResult(
                   ActivityResultContracts.OpenDocument()
@@ -1131,7 +1373,7 @@ jobs:
                       setTypeface(typeface, Typeface.BOLD)
                   }
                   val headerSub = TextView(this).apply {
-                      text = "Floating Subtitle Player • Dual-Window Click-Through Engine"
+                      text = "Floating Subtitle Player • Stealth Pill & Precision Sync"
                       setTextColor(Color.parseColor("#94A3B8"))
                       textSize = 13f
                       setPadding(0, dp(4), 0, dp(18))
@@ -1139,6 +1381,7 @@ jobs:
                   container.addView(headerTitle)
                   container.addView(headerSub)
 
+                  // CARD 1: Permissions
                   val permCard = createGlassCard()
                   permCard.addView(createSectionLabel("1. ANDROID OVERLAY & SURVIVAL PERMISSIONS"))
 
@@ -1186,6 +1429,7 @@ jobs:
                   permCard.addView(permRow)
                   container.addView(permCard)
 
+                  // CARD 2: File Loader
                   val fileCard = createGlassCard()
                   fileCard.addView(createSectionLabel("2. UNIVERSAL SUBTITLE LOADER (.SRT .VTT .ASS .SSA .SUB .SBV .LRC)"))
 
@@ -1204,8 +1448,9 @@ jobs:
                   fileCard.addView(pickFileBtn)
                   container.addView(fileCard)
 
+                  // CARD 3: Clean Sans Typography + 0.1sp Fine Size Adjustment + Stealth Pill Opacity
                   val styleCard = createGlassCard()
-                  styleCard.addView(createSectionLabel("3. CINEMA TYPOGRAPHY & ANTI-GLARE STUDIO"))
+                  styleCard.addView(createSectionLabel("3. CLEAN SANS FONTS & 0.1sp FINE SIZE STUDIO"))
 
                   previewSubView = StrokedSubtitleView(this).apply {
                       layoutParams = LinearLayout.LayoutParams(
@@ -1216,19 +1461,20 @@ jobs:
                           bottomMargin = dp(12)
                       }
                       applyStyleFromRepo(this@MainActivity)
-                      updateSubtitle("The quick brown fox jumps over the lazy dog.", "[Live Cinema Font & Stroke Preview]")
+                      updateSubtitle("Clean, natural subtitle typography.", "[0.1sp Precision Scaling & Vector Outline]")
                   }
                   styleCard.addView(previewSubView)
 
+                  // 4 Clean, Normal Sans-Serif Fonts
                   val fontRow = LinearLayout(this).apply {
                       orientation = LinearLayout.HORIZONTAL
                       setPadding(0, 0, 0, dp(12))
                   }
                   val fonts = listOf(
-                      "atkinson" to "Atkinson",
                       "cinesans" to "CineSans",
-                      "serif" to "Criterion",
-                      "mono" to "SDH Mono"
+                      "roboto" to "Roboto",
+                      "inter" to "Inter",
+                      "opensans" to "Open Sans"
                   )
                   fonts.forEach { (key, label) ->
                       val btn = createAccentButton(label, "#1E293B", "#F8FAFC") {
@@ -1236,48 +1482,67 @@ jobs:
                           refreshLiveStyle()
                       }.apply {
                           layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                              marginEnd = dp(6)
+                              marginEnd = dp(5)
                           }
                       }
                       fontRow.addView(btn)
                   }
                   styleCard.addView(fontRow)
 
-                  val sizeLabel = TextView(this).apply {
-                      text = "Subtitle Size: ${SubtitleRepository.textSizeSp.toInt()}sp"
+                  // Ultra-fine 0.1sp Font Size Controls (10.0sp to 36.0sp -> 260 steps) + Micro-Step Buttons
+                  val sizeHeaderRow = LinearLayout(this).apply {
+                      orientation = LinearLayout.HORIZONTAL
+                      gravity = Gravity.CENTER_VERTICAL
+                  }
+                  sizeLabel = TextView(this).apply {
+                      text = "Subtitle Size: ${"%.1f".format(SubtitleRepository.textSizeSp)}sp"
                       setTextColor(Color.WHITE)
                       textSize = 12.5f
+                      layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
                   }
-                  val sizeSeek = SeekBar(this).apply {
-                      max = 38
-                      progress = SubtitleRepository.textSizeSp.toInt()
+                  val minusSizeBtn = createSmallSteppingButton("-0.2sp") {
+                      updateFontSizeSp((SubtitleRepository.textSizeSp - 0.2f).coerceIn(10.0f, 36.0f))
+                  }
+                  val plusSizeBtn = createSmallSteppingButton("+0.2sp") {
+                      updateFontSizeSp((SubtitleRepository.textSizeSp + 0.2f).coerceIn(10.0f, 36.0f))
+                  }
+                  sizeHeaderRow.addView(sizeLabel)
+                  sizeHeaderRow.addView(minusSizeBtn)
+                  sizeHeaderRow.addView(plusSizeBtn)
+                  styleCard.addView(sizeHeaderRow)
+
+                  sizeSeek = SeekBar(this).apply {
+                      max = 260 // 10.0sp + (progress / 10f) -> up to 36.0sp in 0.1sp increments
+                      progress = ((SubtitleRepository.textSizeSp - 10.0f) * 10f).roundToInt().coerceIn(0, 260)
                       setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                           override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
-                              val sz = p.coerceAtLeast(14).toFloat()
-                              SubtitleRepository.textSizeSp = sz
-                              sizeLabel.text = "Subtitle Size: ${sz.toInt()}sp"
-                              refreshLiveStyle()
+                              if (fromUser) {
+                                  val sz = 10.0f + (p / 10.0f)
+                                  SubtitleRepository.textSizeSp = sz
+                                  sizeLabel.text = "Subtitle Size: ${"%.1f".format(sz)}sp"
+                                  refreshLiveStyle()
+                              }
                           }
                           override fun onStartTrackingTouch(s: SeekBar?) {}
                           override fun onStopTrackingTouch(s: SeekBar?) {}
                       })
                   }
-                  styleCard.addView(sizeLabel)
                   styleCard.addView(sizeSeek)
 
+                  // Vector Outline Stroke Slider
                   val strokeLabel = TextView(this).apply {
-                      text = "Vector Outline Stroke: ${SubtitleRepository.strokeWidthPx.toInt()}px"
+                      text = "Outline Border Thickness: ${"%.1f".format(SubtitleRepository.strokeWidthPx)}px"
                       setTextColor(Color.WHITE)
                       textSize = 12.5f
                       setPadding(0, dp(8), 0, 0)
                   }
                   val strokeSeek = SeekBar(this).apply {
-                      max = 18
-                      progress = SubtitleRepository.strokeWidthPx.toInt()
+                      max = 160
+                      progress = (SubtitleRepository.strokeWidthPx * 10f).roundToInt()
                       setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                           override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
-                              SubtitleRepository.strokeWidthPx = p.toFloat()
-                              strokeLabel.text = "Vector Outline Stroke: ${p}px"
+                              SubtitleRepository.strokeWidthPx = p / 10.0f
+                              strokeLabel.text = "Outline Border Thickness: ${"%.1f".format(SubtitleRepository.strokeWidthPx)}px"
                               refreshLiveStyle()
                           }
                           override fun onStartTrackingTouch(s: SeekBar?) {}
@@ -1287,6 +1552,31 @@ jobs:
                   styleCard.addView(strokeLabel)
                   styleCard.addView(strokeSeek)
 
+                  // Stealth Minimized CC Pill Idle Opacity Slider
+                  val pillAlphaLabel = TextView(this).apply {
+                      text = "Minimized 'CC' Button Visibility: ${(SubtitleRepository.pillIdleAlpha * 100).roundToInt()}% (Stealth)"
+                      setTextColor(Color.parseColor("#CBD5E1"))
+                      textSize = 12f
+                      setPadding(0, dp(8), 0, 0)
+                  }
+                  val pillAlphaSeek = SeekBar(this).apply {
+                      max = 75 // 10% to 85%
+                      progress = ((SubtitleRepository.pillIdleAlpha * 100).roundToInt() - 10).coerceIn(0, 75)
+                      setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                          override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
+                              val pct = p + 10
+                              SubtitleRepository.pillIdleAlpha = pct / 100.0f
+                              pillAlphaLabel.text = "Minimized 'CC' Button Visibility: ${pct}% (Stealth)"
+                              refreshLiveStyle()
+                          }
+                          override fun onStartTrackingTouch(s: SeekBar?) {}
+                          override fun onStopTrackingTouch(s: SeekBar?) {}
+                      })
+                  }
+                  styleCard.addView(pillAlphaLabel)
+                  styleCard.addView(pillAlphaSeek)
+
+                  // Subtitle Color Swatches
                   val colorRow = LinearLayout(this).apply {
                       orientation = LinearLayout.HORIZONTAL
                       setPadding(0, dp(12), 0, 0)
@@ -1295,7 +1585,7 @@ jobs:
                       "White" to Color.WHITE,
                       "Yellow" to Color.parseColor("#FACC15"),
                       "Cyan" to Color.parseColor("#38BDF8"),
-                      "Green" to Color.parseColor("#4ADE80")
+                      "Soft Gray" to Color.parseColor("#E2E8F0")
                   )
                   colors.forEach { (name, col) ->
                       val cBtn = createAccentButton(name, "#1E293B", "#FFFFFF") {
@@ -1304,7 +1594,7 @@ jobs:
                       }.apply {
                           setTextColor(col)
                           layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                              marginEnd = dp(6)
+                              marginEnd = dp(5)
                           }
                       }
                       colorRow.addView(cBtn)
@@ -1312,6 +1602,110 @@ jobs:
                   styleCard.addView(colorRow)
                   container.addView(styleCard)
 
+                  // CARD 4: Framerate Drift & Playback Speed Sync Engine
+                  val speedCard = createGlassCard()
+                  speedCard.addView(createSectionLabel("4. FRAMERATE (FPS) DRIFT & PLAYBACK SPEED SYNC"))
+
+                  val speedHeaderRow = LinearLayout(this).apply {
+                      orientation = LinearLayout.HORIZONTAL
+                      gravity = Gravity.CENTER_VERTICAL
+                      setPadding(0, dp(6), 0, dp(6))
+                  }
+                  speedStatusTv = TextView(this).apply {
+                      text = "Active Speed: ${"%.3f".format(SubtitleRepository.fpsMultiplier)}x (Normal 1:1)"
+                      setTextColor(Color.parseColor("#F59E0B"))
+                      textSize = 13f
+                      setTypeface(typeface, Typeface.BOLD)
+                      layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                  }
+                  val minusSpeedBtn = createSmallSteppingButton("-0.001x") {
+                      applySubtitleSpeed((SubtitleRepository.fpsMultiplier - 0.001).coerceIn(0.500, 2.000), "Custom Fine")
+                  }
+                  val plusSpeedBtn = createSmallSteppingButton("+0.001x") {
+                      applySubtitleSpeed((SubtitleRepository.fpsMultiplier + 0.001).coerceIn(0.500, 2.000), "Custom Fine")
+                  }
+                  speedHeaderRow.addView(speedStatusTv)
+                  speedHeaderRow.addView(minusSpeedBtn)
+                  speedHeaderRow.addView(plusSpeedBtn)
+                  speedCard.addView(speedHeaderRow)
+
+                  // Cinema Framerate Conversion Presets Row
+                  val fpsTitle = TextView(this).apply {
+                      text = "Framerate Conversion Presets (Fixes progressive drift over movie):"
+                      setTextColor(Color.parseColor("#94A3B8"))
+                      textSize = 11.5f
+                      setPadding(0, dp(2), 0, dp(6))
+                  }
+                  speedCard.addView(fpsTitle)
+
+                  val fpsPresetRow = LinearLayout(this).apply {
+                      orientation = LinearLayout.HORIZONTAL
+                      setPadding(0, 0, 0, dp(10))
+                  }
+                  val fpsPresets = listOf(
+                      Triple("1.000x\nNormal", 1.000, "Normal 1:1"),
+                      Triple("0.959x\n25->23.97", 0.95904, "PAL 25fps Sub -> 23.976 Video"),
+                      Triple("1.043x\n23.97->25", 1.04271, "23.976 Sub -> PAL 25fps Video"),
+                      Triple("0.999x\n24->23.97", 0.99900, "24fps Sub -> 23.976 Video")
+                  )
+                  fpsPresets.forEach { (btnText, mult, desc) ->
+                      val b = createAccentButton(btnText, "#1E293B", "#F8FAFC") {
+                          applySubtitleSpeed(mult, desc)
+                      }.apply {
+                          textSize = 10.5f
+                          layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                              marginEnd = dp(5)
+                          }
+                      }
+                      fpsPresetRow.addView(b)
+                  }
+                  speedCard.addView(fpsPresetRow)
+
+                  // Video Playback Speed Multiplier Row (For 1.25x / 1.5x / 2x speed-watching)
+                  val playSpeedTitle = TextView(this).apply {
+                      text = "Video Player Speed Match (When watching videos at 1.25x - 2x):"
+                      setTextColor(Color.parseColor("#94A3B8"))
+                      textSize = 11.5f
+                      setPadding(0, dp(2), 0, dp(6))
+                  }
+                  speedCard.addView(playSpeedTitle)
+
+                  val playSpeedRow = LinearLayout(this).apply {
+                      orientation = LinearLayout.HORIZONTAL
+                      setPadding(0, 0, 0, dp(8))
+                  }
+                  val playSpeeds = listOf(0.75, 1.00, 1.25, 1.50, 2.00)
+                  playSpeeds.forEach { spd ->
+                      val b = createAccentButton("${spd}x", "#1E293B", "#CBD5E1") {
+                          applySubtitleSpeed(spd, "${spd}x Video Speed")
+                      }.apply {
+                          textSize = 11f
+                          layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                              marginEnd = dp(5)
+                          }
+                      }
+                      playSpeedRow.addView(b)
+                  }
+                  speedCard.addView(playSpeedRow)
+
+                  speedSeek = SeekBar(this).apply {
+                      max = 1500 // 0.500x to 2.000x
+                      progress = ((SubtitleRepository.fpsMultiplier - 0.500) * 1000.0).roundToInt().coerceIn(0, 1500)
+                      setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                          override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
+                              if (fromUser) {
+                                  val mult = 0.500 + (p / 1000.0)
+                                  applySubtitleSpeed(mult, "Custom Slider", updateSeek = false)
+                              }
+                          }
+                          override fun onStartTrackingTouch(s: SeekBar?) {}
+                          override fun onStopTrackingTouch(s: SeekBar?) {}
+                      })
+                  }
+                  speedCard.addView(speedSeek)
+                  container.addView(speedCard)
+
+                  // LAUNCH / STOP CTA
                   val launchBtn = createAccentButton("Launch Floating Subtitle Player", "#F59E0B", "#09090B") {
                       if (!Settings.canDrawOverlays(this)) {
                           Toast.makeText(this, "Please grant 'Draw Over Other Apps' permission first!", Toast.LENGTH_LONG).show()
@@ -1350,6 +1744,27 @@ jobs:
                   setContentView(rootScroll)
               }
 
+              private fun updateFontSizeSp(newSizeSp: Float) {
+                  SubtitleRepository.textSizeSp = newSizeSp
+                  sizeLabel.text = "Subtitle Size: ${"%.1f".format(newSizeSp)}sp"
+                  sizeSeek.progress = ((newSizeSp - 10.0f) * 10f).roundToInt().coerceIn(0, 260)
+                  refreshLiveStyle()
+              }
+
+              private fun applySubtitleSpeed(multiplier: Double, labelDesc: String, updateSeek: Boolean = true) {
+                  SubtitleRepository.fpsMultiplier = multiplier
+                  speedStatusTv.text = "Active Speed: ${"%.3f".format(multiplier)}x ($labelDesc)"
+                  if (updateSeek) {
+                      speedSeek.progress = ((multiplier - 0.500) * 1000.0).roundToInt().coerceIn(0, 1500)
+                  }
+                  if (FloatingSubtitleService.isRunning) {
+                      val intent = Intent(this, FloatingSubtitleService::class.java).apply {
+                          action = FloatingSubtitleService.ACTION_UPDATE_SPEED
+                      }
+                      startService(intent)
+                  }
+              }
+
               override fun onResume() {
                   super.onResume()
                   val hasOverlay = Settings.canDrawOverlays(this)
@@ -1380,7 +1795,7 @@ jobs:
                               SubtitleRepository.fileName = displayName
                               activeFileTv.text = "Loaded: $displayName (${parsed.size} cues)"
                               refreshLiveStyle()
-                              Toast.makeText(this, "Loaded ${parsed.size} subtitle lines!", Toast.LENGTH_SHORT).show()
+                              Toast.makeText(this, "Loaded all ${parsed.size} subtitle lines!", Toast.LENGTH_SHORT).show()
                           } else {
                               Toast.makeText(this, "No valid subtitle timestamps found in file.", Toast.LENGTH_LONG).show()
                           }
@@ -1426,12 +1841,35 @@ jobs:
                   }
               }
 
+              private fun createSmallSteppingButton(label: String, onClick: () -> Unit): Button {
+                  return Button(this).apply {
+                      text = label
+                      isAllCaps = false
+                      textSize = 11f
+                      setTextColor(Color.WHITE)
+                      minWidth = 0
+                      minimumWidth = 0
+                      minHeight = 0
+                      minimumHeight = 0
+                      setPadding(dp(10), dp(5), dp(10), dp(5))
+                      background = GradientDrawable().apply {
+                          cornerRadius = dp(8).toFloat()
+                          setColor(Color.parseColor("#1E293B"))
+                      }
+                      layoutParams = LinearLayout.LayoutParams(
+                          LinearLayout.LayoutParams.WRAP_CONTENT,
+                          LinearLayout.LayoutParams.WRAP_CONTENT
+                      ).apply { marginStart = dp(6) }
+                      setOnClickListener { onClick() }
+                  }
+              }
+
               private fun createAccentButton(label: String, bgHex: String, fgHex: String, onClick: () -> Unit): Button {
                   return Button(this).apply {
                       text = label
                       isAllCaps = false
                       setTextColor(Color.parseColor(fgHex))
-                      textSize = 12.5f
+                      textSize = 12f
                       setTypeface(typeface, Typeface.BOLD)
                       gravity = Gravity.CENTER
                       background = GradientDrawable().apply {
@@ -1451,7 +1889,7 @@ jobs:
               }
           }
           """)
-          print("Project files generated successfully.")
+          print("CineSub Pro v2.0 files generated successfully.")
           PYEOF
 
       - name: Configure Android SDK & Compile APK with Gradle 8.7
@@ -1462,12 +1900,10 @@ jobs:
           export ANDROID_SDK_ROOT="$ANDROID_HOME"
           echo "sdk.dir=$ANDROID_HOME" > android_app/local.properties
 
-          # Accept Android SDK licenses automatically
           if [ -f "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
             yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
           fi
 
-          # Download Gradle 8.7 directly and run assembleDebug
           curl -sL https://services.gradle.org/distributions/gradle-8.7-bin.zip -o /tmp/gradle.zip
           unzip -q -o /tmp/gradle.zip -d /tmp
           /tmp/gradle-8.7/bin/gradle -p android_app assembleDebug --console=plain --stacktrace
